@@ -3,24 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCollapsed } from './layer'
 import { useMinSizeRegistration } from './registry'
 import { Secondary } from './Secondary'
-
-class FakeResizeObserver {
-  static instances: FakeResizeObserver[] = []
-  callback: ResizeObserverCallback
-
-  constructor(callback: ResizeObserverCallback) {
-    this.callback = callback
-    FakeResizeObserver.instances.push(this)
-  }
-
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-
-  trigger(size: { width: number; height: number }) {
-    this.callback([{ contentRect: size } as ResizeObserverEntry], this as unknown as ResizeObserver)
-  }
-}
+import { FakeResizeObserver } from './test-utils/fakeResizeObserver'
 
 function ChildProbe({
   label,

@@ -3,6 +3,7 @@ import { act } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Button } from './Button'
 import { Secondary } from './Secondary'
+import { FakeResizeObserver } from './test-utils/fakeResizeObserver'
 
 describe('Button', () => {
   it('renders as a button with the label as its accessible name', () => {
@@ -22,24 +23,6 @@ describe('Button', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
 })
-
-class FakeResizeObserver {
-  static instances: FakeResizeObserver[] = []
-  callback: ResizeObserverCallback
-
-  constructor(callback: ResizeObserverCallback) {
-    this.callback = callback
-    FakeResizeObserver.instances.push(this)
-  }
-
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-
-  trigger(size: { width: number; height: number }) {
-    this.callback([{ contentRect: size } as ResizeObserverEntry], this as unknown as ResizeObserver)
-  }
-}
 
 describe('Button inside a Secondary that collapses', () => {
   beforeEach(() => {
