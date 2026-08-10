@@ -171,6 +171,26 @@ So along the height axis, the collapsed footprint a Primary reports is
 just the same measured size as its expanded one — only the width axis
 needs the analytical icon/ellipsis-based formula.
 
+## Resize
+
+A `resizable` Secondary (opt-in, only meaningful on the same population
+that self-measures — root, `direction="row"`) gets a drag handle on its
+trailing edge. Dragging doesn't introduce separate collapse logic: it
+sets an explicit width on the measurement wrapper in place of its usual
+`100%`, which flows through the identical `ResizeObserver`/threshold path
+a real viewport resize already uses — collapse-on-drag falls out of code
+that already exists rather than needing its own.
+
+The drag has a floor (`requiredCollapsed` — can't shrink below the point
+where even fully-collapsed content fits) but no explicit JS-level
+ceiling. The wrapper's own `maxWidth: 100%` is the real ceiling (true
+available space); capping the drag at exactly `requiredExpanded` in code
+was tried and reverted — it's a knife's-edge value where the JS-computed
+clamp and what the browser reports back through `ResizeObserver` after
+actual layout (with its own subpixel rounding) don't perfectly agree, so
+a drag aimed at "fully expanded" would land just under the threshold and
+stay collapsed no matter how far out it was dragged.
+
 ## Animation speed
 
 ```
