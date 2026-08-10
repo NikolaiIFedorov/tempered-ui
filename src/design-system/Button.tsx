@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useCollapsed, useLayer } from './layer'
+import { useCollapsed, useLayer, useSecondaryDirection } from './layer'
 import { computeCollapsedContentWidth, PrimaryContent } from './PrimaryContent'
 import { useMinSizeRegistration } from './registry'
 import { computeInkColor, toCssColor } from './theme'
@@ -19,24 +19,32 @@ const PADDING_SCALE = { baseSize: 12, shrinkRatio: 0.85, minSize: 4 }
 export function Button({ icon, label, onClick, disabled }: ButtonProps) {
   const layer = useLayer()
   const collapsed = useCollapsed()
+  const direction = useSecondaryDirection()
   const theme = useTheme()
   const padding = computeSize(layer, PADDING_SCALE)
   const buttonRef = useRef<HTMLButtonElement>(null)
-  const [expandedWidth, setExpandedWidth] = useState<number | null>(null)
+  const [expandedSize, setExpandedSize] = useState<number | null>(null)
 
   // Measuring the real <button> (not just PrimaryContent's inner span)
   // means padding/border are captured automatically, whatever they are —
   // no need to separately track "chrome" this component adds.
   useLayoutEffect(() => {
     if (collapsed || !buttonRef.current) return
-    const width = buttonRef.current.getBoundingClientRect().width
-    setExpandedWidth((previous) => (previous === width ? previous : width))
-  }, [collapsed, icon, label])
+    const rect = buttonRef.current.getBoundingClientRect()
+    const size = direction === 'row' ? rect.width : rect.height
+    setExpandedSize((previous) => (previous === size ? previous : size))
+  }, [collapsed, icon, label, direction])
 
-  const collapsedWidth = padding * 2 + computeCollapsedContentWidth(layer, Boolean(icon))
+  // Collapsing only ever hides the label horizontally — a button's height
+  // doesn't shrink when its text disappears — so along the column/height
+  // axis the collapsed footprint is just the same measured size.
+  const collapsedSize =
+    direction === 'row'
+      ? padding * 2 + computeCollapsedContentWidth(layer, Boolean(icon))
+      : (expandedSize ?? 0)
 
   useMinSizeRegistration(
-    expandedWidth === null ? null : { expanded: expandedWidth, collapsed: collapsedWidth },
+    expandedSize === null ? null : { expanded: expandedSize, collapsed: collapsedSize },
   )
 
   // One layer deeper than the enclosing Secondary's own background — reuses

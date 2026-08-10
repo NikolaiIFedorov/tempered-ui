@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { useCollapsed, useLayer } from './layer'
+import { useCollapsed, useLayer, useSecondaryDirection } from './layer'
 import { computeCollapsedContentWidth, PrimaryContent } from './PrimaryContent'
 import { useMinSizeRegistration } from './registry'
 import { computeInkColor, toCssColor } from './theme'
@@ -15,21 +15,27 @@ const FONT_SIZE_SCALE = { baseSize: 14, shrinkRatio: 0.9, minSize: 10 }
 export function Paragraph({ children }: ParagraphProps) {
   const layer = useLayer()
   const collapsed = useCollapsed()
+  const direction = useSecondaryDirection()
   const theme = useTheme()
   const fontSize = computeSize(layer, FONT_SIZE_SCALE)
   const paragraphRef = useRef<HTMLParagraphElement>(null)
-  const [expandedWidth, setExpandedWidth] = useState<number | null>(null)
+  const [expandedSize, setExpandedSize] = useState<number | null>(null)
 
   useLayoutEffect(() => {
     if (collapsed || !paragraphRef.current) return
-    const width = paragraphRef.current.getBoundingClientRect().width
-    setExpandedWidth((previous) => (previous === width ? previous : width))
-  }, [collapsed, children])
+    const rect = paragraphRef.current.getBoundingClientRect()
+    const size = direction === 'row' ? rect.width : rect.height
+    setExpandedSize((previous) => (previous === size ? previous : size))
+  }, [collapsed, children, direction])
 
-  const collapsedWidth = computeCollapsedContentWidth(layer, false)
+  // Collapsing only ever hides text horizontally — it never changes how
+  // tall a single line of text is — so along the column/height axis the
+  // collapsed footprint is just the same measured size as expanded.
+  const collapsedSize =
+    direction === 'row' ? computeCollapsedContentWidth(layer, false) : (expandedSize ?? 0)
 
   useMinSizeRegistration(
-    expandedWidth === null ? null : { expanded: expandedWidth, collapsed: collapsedWidth },
+    expandedSize === null ? null : { expanded: expandedSize, collapsed: collapsedSize },
   )
 
   // Paragraph has no background of its own — it sits directly on whatever

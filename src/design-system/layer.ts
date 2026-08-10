@@ -20,3 +20,15 @@ export function useCollapsed(): boolean {
 }
 
 export const CollapseProvider = CollapseContext.Provider
+
+const DirectionContext = createContext<'row' | 'column'>('row')
+
+// The layout axis of the nearest enclosing Secondary — a registering
+// Primary needs this to know whether it should measure/report its own
+// width or height, since a Secondary compares available space along
+// whichever axis it actually lays its children out on.
+export function useSecondaryDirection(): 'row' | 'column' {
+  return useContext(DirectionContext)
+}
+
+export const DirectionProvider = DirectionContext.Provider

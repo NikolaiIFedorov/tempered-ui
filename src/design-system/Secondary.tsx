@@ -1,6 +1,12 @@
 import { Children, isValidElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import { CollapseProvider, LayerProvider, useCollapsed, useOwnSecondaryLayer } from './layer'
+import {
+  CollapseProvider,
+  DirectionProvider,
+  LayerProvider,
+  useCollapsed,
+  useOwnSecondaryLayer,
+} from './layer'
 import { type MinSizeEntry, MinSizeRegistryProvider, useMinSizeRegistration } from './registry'
 import { computeInkColor, toCssColor } from './theme'
 import { useTheme } from './ThemeProvider'
@@ -146,22 +152,24 @@ export function Secondary({
   return (
     <LayerProvider value={layer}>
       <CollapseProvider value={collapsed}>
-        <MinSizeRegistryProvider value={registry}>
-          {isRoot ? (
-            // The measured box must always reflect the true available
-            // space, never its own content — fit-content on it directly
-            // would make it hug whatever's currently rendered (including
-            // the collapsed version), making ResizeObserver read its own
-            // collapse decision back as "not enough room" and get stuck.
-            // This invisible width: 100% wrapper is what's measured; the
-            // fit-content, visually-styled row lives inside it, unmeasured.
-            <div ref={containerRef} style={{ width: '100%' }}>
-              {flexRow}
-            </div>
-          ) : (
-            flexRow
-          )}
-        </MinSizeRegistryProvider>
+        <DirectionProvider value={direction}>
+          <MinSizeRegistryProvider value={registry}>
+            {isRoot ? (
+              // The measured box must always reflect the true available
+              // space, never its own content — fit-content on it directly
+              // would make it hug whatever's currently rendered (including
+              // the collapsed version), making ResizeObserver read its own
+              // collapse decision back as "not enough room" and get stuck.
+              // This invisible width: 100% wrapper is what's measured; the
+              // fit-content, visually-styled row lives inside it, unmeasured.
+              <div ref={containerRef} style={{ width: '100%' }}>
+                {flexRow}
+              </div>
+            ) : (
+              flexRow
+            )}
+          </MinSizeRegistryProvider>
+        </DirectionProvider>
       </CollapseProvider>
     </LayerProvider>
   )

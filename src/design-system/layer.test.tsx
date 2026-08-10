@@ -2,10 +2,12 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import {
   CollapseProvider,
+  DirectionProvider,
   LayerProvider,
   useCollapsed,
   useLayer,
   useOwnSecondaryLayer,
+  useSecondaryDirection,
 } from './layer'
 
 function LayerProbe({ label }: { label: string }) {
@@ -80,5 +82,26 @@ describe('collapse propagation', () => {
     const [outer, inner] = screen.getAllByTestId('collapsed')
     expect(outer).toHaveTextContent('true')
     expect(inner).toHaveTextContent('false')
+  })
+})
+
+function DirectionProbe() {
+  const direction = useSecondaryDirection()
+  return <div data-testid="direction">{direction}</div>
+}
+
+describe('direction propagation', () => {
+  it('defaults to row', () => {
+    render(<DirectionProbe />)
+    expect(screen.getByTestId('direction')).toHaveTextContent('row')
+  })
+
+  it('reflects the nearest enclosing Secondary direction', () => {
+    render(
+      <DirectionProvider value="column">
+        <DirectionProbe />
+      </DirectionProvider>,
+    )
+    expect(screen.getByTestId('direction')).toHaveTextContent('column')
   })
 })

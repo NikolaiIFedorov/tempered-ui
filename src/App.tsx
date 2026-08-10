@@ -80,13 +80,15 @@ function AppContent() {
         minHeight: '100vh',
         padding: 16,
         fontFamily: 'sans-serif',
-        backgroundColor: toCssColor(theme.resolveBase(0)),
+        backgroundColor: toCssColor(theme.resolveBase(-1)),
       }}
     >
-      <Paragraph>
-        Design-system demo — shrink the window to see the toolbar collapse to icons, then scroll
-        once it can't collapse any further.
-      </Paragraph>
+      <Secondary direction="column">
+        <Paragraph>
+          Design-system demo — shrink the window to see the toolbar collapse to icons, then scroll
+          once it can't collapse any further.
+        </Paragraph>
+      </Secondary>
       <Secondary style={{ marginTop: 12 }}>
         <Button icon={<SaveIcon />} label="Save" onClick={() => console.log('save')} />
         <Button icon={<CancelIcon />} label="Cancel" />
