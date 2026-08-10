@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { act } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Button } from './Button'
+import { MinSizeRegistryProvider } from './registry'
 import { Secondary } from './Secondary'
 import { FakeResizeObserver } from './test-utils/fakeResizeObserver'
 
@@ -21,6 +22,32 @@ describe('Button', () => {
   it('is disabled when disabled is set', () => {
     render(<Button label="Save" disabled />)
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+})
+
+describe('Button min-size registration', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("registers the real <button> element's width, including its own padding — not just its inner content", () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 84,
+    } as DOMRect)
+
+    const register = vi.fn()
+    const unregister = vi.fn()
+
+    render(
+      <MinSizeRegistryProvider value={{ register, unregister }}>
+        <Button icon={<svg />} label="Save" />
+      </MinSizeRegistryProvider>,
+    )
+
+    expect(register).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ expanded: 84 }),
+    )
   })
 })
 

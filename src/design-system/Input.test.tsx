@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { act } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Input } from './Input'
+import { MinSizeRegistryProvider } from './registry'
 import { Secondary } from './Secondary'
 import { FakeResizeObserver } from './test-utils/fakeResizeObserver'
 
@@ -22,6 +23,33 @@ describe('Input', () => {
   it('is disabled when disabled is set', () => {
     render(<Input icon={<svg />} label="Width" value="42" onChange={() => {}} disabled />)
     expect(screen.getByDisplayValue('42')).toBeDisabled()
+  })
+})
+
+describe('Input min-size registration', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('registers the prefix width plus the gap plus the field width — not just the prefix alone', () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 30,
+    } as DOMRect)
+
+    const register = vi.fn()
+    const unregister = vi.fn()
+
+    render(
+      <MinSizeRegistryProvider value={{ register, unregister }}>
+        <Input icon={<svg />} label="Width" value="42" onChange={() => {}} />
+      </MinSizeRegistryProvider>,
+    )
+
+    // At layer 0: gap = 8 (base), fieldWidth = 96 (base) — prefix (30) + gap (8) + field (96) = 134.
+    expect(register).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ expanded: 134 }),
+    )
   })
 })
 

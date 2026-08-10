@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CollapseProvider } from './layer'
+import { MinSizeRegistryProvider } from './registry'
 import { Paragraph } from './Paragraph'
 
 describe('Paragraph', () => {
@@ -17,5 +18,31 @@ describe('Paragraph', () => {
       </CollapseProvider>,
     )
     expect(screen.getByTitle('Explains what this panel does.')).toBeInTheDocument()
+  })
+})
+
+describe('Paragraph min-size registration', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('registers the real <p> element width so it counts toward its Secondary collapse threshold', () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 200,
+    } as DOMRect)
+
+    const register = vi.fn()
+    const unregister = vi.fn()
+
+    render(
+      <MinSizeRegistryProvider value={{ register, unregister }}>
+        <Paragraph>Explains what this panel does.</Paragraph>
+      </MinSizeRegistryProvider>,
+    )
+
+    expect(register).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ expanded: 200 }),
+    )
   })
 })

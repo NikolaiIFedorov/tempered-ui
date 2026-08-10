@@ -1,7 +1,6 @@
 import { render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { CollapseProvider } from './layer'
-import { MinSizeRegistryProvider } from './registry'
 import { PrimaryContent } from './PrimaryContent'
 
 describe('PrimaryContent rendering', () => {
@@ -28,31 +27,5 @@ describe('PrimaryContent rendering', () => {
       </CollapseProvider>,
     )
     expect(screen.getByTitle('Long paragraph text')).toBeInTheDocument()
-  })
-})
-
-describe('PrimaryContent min-size registration', () => {
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
-  it('registers its measured expanded width and icon-based collapsed width', () => {
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-      width: 123,
-    } as DOMRect)
-
-    const register = vi.fn()
-    const unregister = vi.fn()
-
-    render(
-      <MinSizeRegistryProvider value={{ register, unregister }}>
-        <PrimaryContent icon={<svg />} label="Save" />
-      </MinSizeRegistryProvider>,
-    )
-
-    expect(register).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ expanded: 123 }),
-    )
   })
 })
