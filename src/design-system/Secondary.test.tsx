@@ -106,6 +106,30 @@ describe('Secondary collapse', () => {
   })
 })
 
+describe('column-direction root Secondary', () => {
+  it('never self-measures — a block element has no genuine external height constraint in ordinary flow', () => {
+    render(
+      <Secondary direction="column">
+        <ChildProbe label="a" expanded={9999} collapsed={9999} />
+      </Secondary>,
+    )
+
+    // No ResizeObserver at all — there is nothing to measure against.
+    expect(FakeResizeObserver.instances).toHaveLength(0)
+    expect(screen.getByTestId('a')).toHaveTextContent('false')
+  })
+
+  it('stays expanded regardless of how large its children register, avoiding the self-referential trap', () => {
+    render(
+      <Secondary direction="column">
+        <ChildProbe label="a" expanded={100000} collapsed={50000} />
+      </Secondary>,
+    )
+
+    expect(screen.getByTestId('a')).toHaveTextContent('false')
+  })
+})
+
 describe('nested Secondary collapse cascade', () => {
   it("cascades collapse into a nested Secondary's primaries when the ancestor collapses", () => {
     render(

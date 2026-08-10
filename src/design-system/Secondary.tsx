@@ -43,13 +43,22 @@ export function Secondary({
   // ResizeObserver-driven self-measurement. A nested Secondary purely
   // inherits its collapse state from its ancestor.
   const isRoot = layer === 0
+  // Even for the root, self-measurement only makes sense for direction:
+  // "row" — a block element always gets a genuine width from its
+  // containing block in ordinary page flow, but its height is intrinsic
+  // (auto) unless something explicitly constrains it. A column Secondary's
+  // measurement wrapper would just hug its own content's height, making
+  // "available vs. required" self-referential — any one bad reading during
+  // a fast resize can permanently stick it collapsed, the same failure
+  // mode nested Secondaries hit before they stopped self-measuring.
+  const selfMeasures = isRoot && direction === 'row'
   const containerRef = useRef<HTMLDivElement>(null)
   const entries = useRef(new Map<string, MinSizeEntry>())
   const lastAvailableSize = useRef(0)
   const hasMeasured = useRef(false)
   const [ownCollapsed, setOwnCollapsed] = useState(false)
   const [footprint, setFootprint] = useState<MinSizeEntry | null>(null)
-  const collapsed = isRoot ? ownCollapsed : ancestorCollapsed
+  const collapsed = selfMeasures ? ownCollapsed : ancestorCollapsed
 
   const recompute = useCallback(
     (availableSize: number) => {
@@ -73,11 +82,11 @@ export function Secondary({
           : { expanded: requiredExpanded, collapsed: requiredCollapsed },
       )
 
-      if (isRoot && hasMeasured.current) {
+      if (selfMeasures && hasMeasured.current) {
         setOwnCollapsed(availableSize < requiredExpanded)
       }
     },
-    [layer, isRoot],
+    [layer, selfMeasures],
   )
 
   // Reports this Secondary's own aggregate footprint to its ancestor's
@@ -101,20 +110,19 @@ export function Secondary({
   )
 
   useEffect(() => {
-    if (!isRoot) return
+    if (!selfMeasures) return
     const node = containerRef.current
     if (!node) return
     const observer = new ResizeObserver((observedEntries) => {
       const [entry] = observedEntries
       if (!entry) return
-      const size = direction === 'row' ? entry.contentRect.width : entry.contentRect.height
-      lastAvailableSize.current = size
+      lastAvailableSize.current = entry.contentRect.width
       hasMeasured.current = true
-      recompute(size)
+      recompute(entry.contentRect.width)
     })
     observer.observe(node)
     return () => observer.disconnect()
-  }, [direction, recompute, isRoot])
+  }, [recompute, selfMeasures])
 
   if (hidden) return null
 
@@ -159,7 +167,7 @@ export function Secondary({
       <CollapseProvider value={collapsed}>
         <DirectionProvider value={direction}>
           <MinSizeRegistryProvider value={registry}>
-            {isRoot ? (
+            {selfMeasures ? (
               // The measured box must always reflect the true available
               // space, never its own content — fit-content on it directly
               // would make it hug whatever's currently rendered (including
