@@ -1,7 +1,7 @@
 import { Children, isValidElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { CollapseProvider, LayerProvider, useCollapsed, useOwnSecondaryLayer } from './layer'
-import { type MinSizeEntry, MinSizeRegistryProvider } from './registry'
+import { type MinSizeEntry, MinSizeRegistryProvider, useMinSizeRegistration } from './registry'
 import { computeSize } from './tokens'
 
 export interface SecondaryProps {
@@ -15,41 +15,71 @@ const GAP_SCALE = { baseSize: 8, shrinkRatio: 0.85, minSize: 2 }
 export function Secondary({ direction = 'row', hidden = false, children }: SecondaryProps) {
   const layer = useOwnSecondaryLayer()
   const ancestorCollapsed = useCollapsed()
+  // A Secondary nested inside another Secondary is always wrapped in
+  // flexShrink: 0 by its parent, so its own box can never actually be
+  // squeezed by row layout — only the root (no ancestor Secondary) has a
+  // box whose size reflects real external constraints, so only it runs
+  // ResizeObserver-driven self-measurement. A nested Secondary purely
+  // inherits its collapse state from its ancestor.
+  const isRoot = layer === 0
   const containerRef = useRef<HTMLDivElement>(null)
   const entries = useRef(new Map<string, MinSizeEntry>())
   const lastAvailableSize = useRef(0)
   const hasMeasured = useRef(false)
   const [ownCollapsed, setOwnCollapsed] = useState(false)
-  const collapsed = ancestorCollapsed || ownCollapsed
+  const [footprint, setFootprint] = useState<MinSizeEntry | null>(null)
+  const collapsed = isRoot ? ownCollapsed : ancestorCollapsed
 
   const recompute = useCallback(
     (availableSize: number) => {
-      let required = 0
+      let requiredExpanded = 0
+      let requiredCollapsed = 0
       for (const entry of entries.current.values()) {
-        required += entry.expanded
+        requiredExpanded += entry.expanded
+        requiredCollapsed += entry.collapsed
       }
       const gap = computeSize(layer, GAP_SCALE)
-      required += gap * Math.max(0, entries.current.size - 1)
-      setOwnCollapsed(availableSize < required)
+      const gapTotal = gap * Math.max(0, entries.current.size - 1)
+      requiredExpanded += gapTotal
+      requiredCollapsed += gapTotal
+
+      setFootprint((previous) =>
+        previous &&
+        previous.expanded === requiredExpanded &&
+        previous.collapsed === requiredCollapsed
+          ? previous
+          : { expanded: requiredExpanded, collapsed: requiredCollapsed },
+      )
+
+      if (isRoot && hasMeasured.current) {
+        setOwnCollapsed(availableSize < requiredExpanded)
+      }
     },
-    [layer],
+    [layer, isRoot],
   )
+
+  // Reports this Secondary's own aggregate footprint to its ancestor's
+  // registry (a no-op for the root, which has no ancestor registry), so
+  // the ancestor's own collapse threshold accounts for nested subtrees
+  // instead of being blind to them.
+  useMinSizeRegistration(footprint)
 
   const registry = useMemo(
     () => ({
       register(id: string, entry: MinSizeEntry) {
         entries.current.set(id, entry)
-        if (hasMeasured.current) recompute(lastAvailableSize.current)
+        recompute(lastAvailableSize.current)
       },
       unregister(id: string) {
         entries.current.delete(id)
-        if (hasMeasured.current) recompute(lastAvailableSize.current)
+        recompute(lastAvailableSize.current)
       },
     }),
     [recompute],
   )
 
   useEffect(() => {
+    if (!isRoot) return
     const node = containerRef.current
     if (!node) return
     const observer = new ResizeObserver((observedEntries) => {
@@ -62,7 +92,7 @@ export function Secondary({ direction = 'row', hidden = false, children }: Secon
     })
     observer.observe(node)
     return () => observer.disconnect()
-  }, [direction, recompute])
+  }, [direction, recompute, isRoot])
 
   if (hidden) return null
 

@@ -107,7 +107,7 @@ describe('Secondary collapse', () => {
 })
 
 describe('nested Secondary collapse cascade', () => {
-  it("cascades collapse into a nested Secondary's primaries even when the nested Secondary has plenty of its own space", () => {
+  it("cascades collapse into a nested Secondary's primaries when the ancestor collapses", () => {
     render(
       <Secondary>
         <ChildProbe label="a" expanded={50} collapsed={20} />
@@ -117,11 +117,9 @@ describe('nested Secondary collapse cascade', () => {
       </Secondary>,
     )
 
-    // Effects run children-first, so the nested Secondary's observer is created before the outer's.
-    const [nestedObserver, outerObserver] = FakeResizeObserver.instances
-
+    // A nested Secondary has no ResizeObserver of its own — only the root does.
+    const [outerObserver] = FakeResizeObserver.instances
     act(() => {
-      nestedObserver.trigger({ width: 200, height: 40 })
       outerObserver.trigger({ width: 40, height: 40 })
     })
 
@@ -129,7 +127,7 @@ describe('nested Secondary collapse cascade', () => {
     expect(screen.getByTestId('nested')).toHaveTextContent('true')
   })
 
-  it('still collapses a nested Secondary on its own when only its own space is insufficient', () => {
+  it('does not run its own squeeze detection — a nested Secondary only ever reflects its ancestor', () => {
     render(
       <Secondary>
         <ChildProbe label="a" expanded={10} collapsed={5} />
@@ -139,18 +137,20 @@ describe('nested Secondary collapse cascade', () => {
       </Secondary>,
     )
 
-    const [nestedObserver, outerObserver] = FakeResizeObserver.instances
+    // Only one ResizeObserver exists at all (the root's); there is nothing
+    // to trigger on the nested Secondary even if its own content is large.
+    expect(FakeResizeObserver.instances).toHaveLength(1)
 
+    const [outerObserver] = FakeResizeObserver.instances
     act(() => {
       outerObserver.trigger({ width: 200, height: 40 })
-      nestedObserver.trigger({ width: 30, height: 40 })
     })
 
     expect(screen.getByTestId('a')).toHaveTextContent('false')
-    expect(screen.getByTestId('nested')).toHaveTextContent('true')
+    expect(screen.getByTestId('nested')).toHaveTextContent('false')
   })
 
-  it('expands the nested Secondary again once both it and its ancestor recover space', () => {
+  it('expands the nested Secondary again once the ancestor recovers space, without getting stuck', () => {
     render(
       <Secondary>
         <ChildProbe label="a" expanded={50} collapsed={20} />
@@ -160,10 +160,9 @@ describe('nested Secondary collapse cascade', () => {
       </Secondary>,
     )
 
-    const [nestedObserver, outerObserver] = FakeResizeObserver.instances
+    const [outerObserver] = FakeResizeObserver.instances
 
     act(() => {
-      nestedObserver.trigger({ width: 200, height: 40 })
       outerObserver.trigger({ width: 40, height: 40 })
     })
     expect(screen.getByTestId('nested')).toHaveTextContent('true')
@@ -172,6 +171,29 @@ describe('nested Secondary collapse cascade', () => {
       outerObserver.trigger({ width: 200, height: 40 })
     })
     expect(screen.getByTestId('nested')).toHaveTextContent('false')
+  })
+
+  it("counts a nested Secondary's own footprint toward its ancestor's collapse threshold", () => {
+    render(
+      <Secondary>
+        <ChildProbe label="a" expanded={10} collapsed={5} />
+        <Secondary>
+          <ChildProbe label="nested" expanded={100} collapsed={40} />
+        </Secondary>
+      </Secondary>,
+    )
+
+    const [outerObserver] = FakeResizeObserver.instances
+
+    // "a" alone (10) plus a gap easily fits in 60px, but the nested
+    // Secondary's own expanded footprint (~100) does not — the ancestor
+    // must still collapse to account for it.
+    act(() => {
+      outerObserver.trigger({ width: 60, height: 40 })
+    })
+
+    expect(screen.getByTestId('a')).toHaveTextContent('true')
+    expect(screen.getByTestId('nested')).toHaveTextContent('true')
   })
 })
 
