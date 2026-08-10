@@ -33,13 +33,21 @@ tokens therefore step geometrically, not linearly:
 size(layer) = baseSize * shrinkRatio^layer
 ```
 
-Defaults: `shrinkRatio = 0.85`. Applies uniformly to padding, gap, icon size,
-and font size, so a layer-2 panel's typography and spacing shrink together
-and stay proportioned to each other.
+`shrinkRatio` is not one shared constant — it's tuned per token. Padding
+uses `0.6` (a deliberately fast shrink, so nesting depth reads as an
+obvious step rather than something you have to look closely to notice);
+gap, icon size, and font size use a gentler `0.85`, since those need to
+stay legible/usable rather than dramatically shrink. All of them share
+the same equation shape, just calibrated differently per token.
 
 Each size token has a `minSize` floor independent of the equation above — the
 point past which the token stops shrinking and instead triggers collapse
 (see below).
+
+Fillets (border-radius) aren't their own token — every component that
+has padding derives its corner radius directly from that same computed
+padding value (`radius = padding * 0.5`), so rounding scales with layer
+depth for free instead of needing to be kept in sync separately.
 
 ## Color
 
