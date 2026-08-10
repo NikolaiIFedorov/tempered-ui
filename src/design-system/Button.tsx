@@ -14,7 +14,8 @@ export interface ButtonProps {
   disabled?: boolean
 }
 
-const PADDING_SCALE = { baseSize: 12, shrinkRatio: 0.85, minSize: 4 }
+const PADDING_SCALE = { baseSize: 12, shrinkRatio: 0.6, minSize: 4 }
+const RADIUS_RATIO = 0.5
 
 export function Button({ icon, label, onClick, disabled }: ButtonProps) {
   const layer = useLayer()
@@ -61,6 +62,7 @@ export function Button({ icon, label, onClick, disabled }: ButtonProps) {
       disabled={disabled}
       style={{
         padding,
+        borderRadius: padding * RADIUS_RATIO,
         border: 'none',
         backgroundColor: toCssColor(background),
         color: toCssColor(ink),

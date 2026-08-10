@@ -18,7 +18,8 @@ export interface InputProps {
 
 const FIELD_WIDTH_SCALE = { baseSize: 96, shrinkRatio: 0.85, minSize: 48 }
 const GAP_SCALE = { baseSize: 8, shrinkRatio: 0.85, minSize: 4 }
-const PADDING_SCALE = { baseSize: 6, shrinkRatio: 0.85, minSize: 2 }
+const PADDING_SCALE = { baseSize: 6, shrinkRatio: 0.6, minSize: 2 }
+const RADIUS_RATIO = 0.5
 
 export function Input({ icon, label, value, onChange, placeholder, disabled }: InputProps) {
   const layer = useLayer()
@@ -101,6 +102,7 @@ export function Input({ icon, label, value, onChange, placeholder, disabled }: I
         style={{
           width: fieldWidth,
           padding,
+          borderRadius: padding * RADIUS_RATIO,
           boxSizing: 'border-box',
           border: 'none',
           backgroundColor: toCssColor(fieldBackground),
