@@ -4,14 +4,30 @@
   "description": "Web-based 3D printing analysis toolset and CAD, focusing on the UX",
   "license": "ISC",
   "author": "",
-  "type": "commonjs",
-  "main": "index.js",
+  "type": "module",
   "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
     "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx}\"",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "culori": "^4.0.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
-    "prettier": "^3.6.2"
+    "@testing-library/jest-dom": "^7.0.1",
+    "@types/culori": "^4.0.1",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.6.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^4.1.10"
   },
   "keywords": []
 }

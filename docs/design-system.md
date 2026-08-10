@@ -1,0 +1,115 @@
+# UI Design System
+
+## Component model
+
+Two component kinds exist. **Primary** components serve one interaction purpose
+(button, input, paragraph, slider) and each carries an icon *and* a text label
+where the component type has a meaningful icon; icon-less types (paragraph,
+plain label) omit it rather than forcing a placeholder. **Secondary**
+components are containers: they arrange a list of Primary components, or nest
+another Secondary component. Secondary components are the only unit that can
+be hidden, relocated, or resized by the user (panels, toolbars, docked
+groups).
+
+## Layer
+
+`layer` is not a style knob set per component — it is the nesting depth of
+Secondary containers, computed automatically from the containment tree. The
+root Secondary (e.g. the main toolbar) is `layer 0`; a Secondary nested inside
+it is `layer 1`; a Secondary nested inside that is `layer 2`, and so on. Every
+Primary component inherits the `layer` of its nearest enclosing Secondary — it
+does not have its own independent layer.
+
+This makes `layer` a single derived integer that both color and size read
+from, without being set by hand anywhere in the component tree.
+
+## Size
+
+Perceived size differences are proportional, not absolute (Weber-Fechner) —
+the same 4px change reads as significant at 16px and invisible at 200px. Size
+tokens therefore step geometrically, not linearly:
+
+```
+size(layer) = baseSize * shrinkRatio^layer
+```
+
+Defaults: `shrinkRatio = 0.85`. Applies uniformly to padding, gap, icon size,
+and font size, so a layer-2 panel's typography and spacing shrink together
+and stay proportioned to each other.
+
+Each size token has a `minSize` floor independent of the equation above — the
+point past which the token stops shrinking and instead triggers collapse
+(see below).
+
+## Color
+
+OKLCH lightness (`L`) is already perceptually uniform by construction, unlike
+raw RGB — equal steps in `L` read as equal perceptual steps, so color does
+**not** use the same geometric formula as size. It steps linearly:
+
+```
+L(layer) = clamp(baseL + sign * layer * Lstep, Lmin, Lmax)
+```
+
+Hue and chroma stay fixed per semantic role (surface, accent, danger, ...) —
+only lightness moves with layer.
+
+`darkMode` comes from `window.matchMedia('(prefers-color-scheme: dark)')`,
+listened to via its `change` event so the theme repaints live if the user
+flips their OS setting while the app is open. It sets both `baseL` and
+`sign`:
+
+```
+baseL = darkMode ? Lstep : 1 - Lstep
+sign  = darkMode ? +1 : -1
+```
+
+`layer 0` sits exactly one `Lstep` off pure black or pure white, and each
+deeper layer takes another `Lstep` in the same direction — `Lstep` is the
+single constant governing both the base offset and the per-layer increment.
+`Lmin`/`Lmax` clamp the band per role so deep nesting can't wash a surface
+out to pure white or black.
+
+### Accent color
+
+Accent color tries the OS accent color first, falling back to a curated
+default when that isn't available:
+
+1. Render an offscreen element with `color: AccentColor` (CSS Color 4 system
+   color keyword) and read back the resolved value via `getComputedStyle`.
+2. Support is inconsistent — solid in Chromium, partial in Firefox, absent
+   in Safari (no real OS value is resolved there). Treat a missing or
+   generic-looking result as a failure, not a valid accent.
+3. On failure, fall back to a curated default accent hue baked into the
+   theme, run through the same `L(layer)` equation as every other role.
+
+## Collapse
+
+A Secondary container computes its required minimum size from its children's
+`minSize` floors (sum along the layout axis, max across it). When available
+space drops below that requirement, the container collapses its Primary
+children:
+
+1. Each Primary switches to icon-only representation, dropping its text
+   label. Its collapsed `minSize` floor is much smaller than expanded.
+2. A Primary with no icon (paragraph, plain label) collapses to a
+   fixed-width ellipsized fragment instead.
+3. If children still don't fit after every Primary has collapsed, remaining
+   overflow is hidden behind a "+N more" affordance rather than clipped
+   silently.
+
+Collapse is driven purely by measured available space vs. computed minimum —
+`layer` does not gate whether collapse can happen, only how large the
+uncollapsed baseline was to begin with.
+
+## Animation speed
+
+```
+duration(layer) = baseDuration * durationRatio^layer
+```
+
+Deeper layers are physically smaller on screen, so they can complete the same
+perceived motion in less time — this is an optional refinement, not a
+requirement; a single `baseDuration` per motion type (open/close, hover,
+collapse-transition) is a valid starting point if per-layer duration scaling
+turns out to be unnecessary in practice.
