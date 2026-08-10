@@ -90,12 +90,15 @@ single constant governing both the base offset and the per-layer increment.
 `Lmin`/`Lmax` clamp the band per role so deep nesting can't wash a surface
 out to pure white or black.
 
-The page canvas itself is `layer -1` in this same equation — not a special
-case, just the one layer further toward the true extreme than layer 0
-already is. A layer-0 Secondary needs to look visually distinct from the
-bare page it sits on, and `L(-1)` gives exactly that for free: pure
-black/white before the `Lstep` offset (or the extreme after `Lmin`/`Lmax`
-clamping) rather than colliding with `L(0)`.
+The page canvas is conceptually one layer further toward the true extreme
+than layer 0 — but it's resolved as its own thing (`resolveCanvas`), not
+as `L(-1)` through the clamped equation: `Lmin`/`Lmax` exist to stop deep
+*nesting* from washing a surface out to an extreme, and applying that same
+clamp to the canvas would cut its distance from layer 0 down to a fraction
+of `Lstep` instead of the full step, since layer 0 already sits close to
+the clamp boundary. The canvas is the one thing that's supposed to reach
+the true extreme (pure black in dark mode, pure white in light) — it
+isn't a nested surface at risk of washing out, so it isn't clamped.
 
 ### Accent color
 
