@@ -139,16 +139,22 @@ children:
    collapsed size, so the browser overflows into a scrollbar instead of
    squashing content.
 
-Only the root Secondary (`layer 0`, no enclosing Secondary) measures its
-own available space — a nested Secondary is always wrapped in
-`flexShrink: 0` by its parent, so its box can never actually be squeezed
-by row layout, and self-measuring it is not just unnecessary but actively
-wrong: collapsing shrinks its content, which shrinks its own box, which a
-naive self-measurement would misread as "still too small" and get stuck
-on even after the real cause goes away. Every nested Secondary instead
-purely inherits its collapse state from its nearest ancestor Secondary —
-once the root collapses, every Primary nested beneath it collapses too,
-at any depth.
+Only a root Secondary (`layer 0`, no enclosing Secondary) with
+`direction="row"` measures its own available space. A nested Secondary is
+always wrapped in `flexShrink: 0` by its parent, so its box can never
+actually be squeezed by row layout, and self-measuring it is not just
+unnecessary but actively wrong: collapsing shrinks its content, which
+shrinks its own box, which a naive self-measurement would misread as
+"still too small" and get stuck on even after the real cause goes away.
+The same self-referential trap hits a root with `direction="column"` for
+a different reason: a block element always gets a genuine width from its
+containing block in ordinary page flow, but its height is intrinsic
+(`auto`) unless something explicitly constrains it, so there's no real
+external height to measure against — a column-direction root never
+self-measures and simply stays expanded. Every Secondary that doesn't
+self-measure instead purely inherits its collapse state from its nearest
+ancestor Secondary — once a measuring root collapses, every Primary
+nested beneath it collapses too, at any depth.
 
 A nested Secondary still contributes to whether its *ancestor* needs to
 collapse: it reports its own aggregate footprint (the sum of its own
