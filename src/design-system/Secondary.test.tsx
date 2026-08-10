@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCollapsed } from './layer'
 import { useMinSizeRegistration } from './registry'
@@ -260,5 +260,116 @@ describe('Secondary overflow (scroll fallback for when even collapsed children d
     expect(screen.getByTestId('a').parentElement).toHaveStyle({
       flexShrink: '0',
     })
+  })
+})
+
+describe('drag-to-resize', () => {
+  beforeEach(() => {
+    // jsdom doesn't implement pointer capture.
+    HTMLElement.prototype.setPointerCapture = vi.fn()
+    HTMLElement.prototype.hasPointerCapture = vi.fn(() => true)
+    HTMLElement.prototype.releasePointerCapture = vi.fn()
+  })
+
+  // Dragging only updates React state (dragWidth), which changes the
+  // wrapper's width style. In a real browser that CSS change makes the
+  // real ResizeObserver fire on its own; the fake one needs an explicit
+  // trigger to simulate that, same as every other test in this file — so
+  // this reads the width dragWidth actually clamped to and feeds it back
+  // in, rather than duplicating the clamp math here.
+  function dragHandleBy(container: HTMLElement, deltaX: number, startWidth = 200) {
+    const handle = screen.getByRole('separator')
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: startWidth,
+    } as DOMRect)
+    fireEvent.pointerDown(handle, { clientX: 0, pointerId: 1 })
+    fireEvent.pointerMove(handle, { clientX: deltaX, pointerId: 1 })
+
+    const appliedWidth = parseFloat((container.firstChild as HTMLElement).style.width)
+    const observer = FakeResizeObserver.instances[0]
+    act(() => {
+      observer.trigger({ width: appliedWidth, height: 40 })
+    })
+
+    return handle
+  }
+
+  it('renders no handle by default (resizable is opt-in)', () => {
+    render(
+      <Secondary>
+        <ChildProbe label="a" expanded={50} collapsed={20} />
+      </Secondary>,
+    )
+    expect(screen.queryByRole('separator')).not.toBeInTheDocument()
+  })
+
+  it('renders no handle on a nested Secondary even when resizable is set — it has nothing of its own to self-measure', () => {
+    render(
+      <Secondary>
+        <ChildProbe label="a" expanded={50} collapsed={20} />
+        <Secondary resizable>
+          <ChildProbe label="nested" expanded={30} collapsed={10} />
+        </Secondary>
+      </Secondary>,
+    )
+    expect(screen.queryByRole('separator')).not.toBeInTheDocument()
+  })
+
+  it('renders a handle on a resizable root Secondary', () => {
+    render(
+      <Secondary resizable>
+        <ChildProbe label="a" expanded={50} collapsed={20} />
+      </Secondary>,
+    )
+    expect(screen.getByRole('separator')).toBeInTheDocument()
+  })
+
+  it('collapses children when dragged narrower than the required expanded width, through the same pipeline a viewport resize uses', () => {
+    const { container } = render(
+      <Secondary resizable>
+        <ChildProbe label="a" expanded={50} collapsed={20} />
+        <ChildProbe label="b" expanded={50} collapsed={20} />
+      </Secondary>,
+    )
+
+    dragHandleBy(container, -150, 200)
+
+    expect(screen.getByTestId('a')).toHaveTextContent('true')
+    expect(screen.getByTestId('b')).toHaveTextContent('true')
+    expect((container.firstChild as HTMLElement).style.width).not.toBe('100%')
+  })
+
+  it('clamps the dragged width so it never shrinks below the fully-collapsed required size', () => {
+    const { container } = render(
+      <Secondary resizable>
+        <ChildProbe label="a" expanded={50} collapsed={20} />
+      </Secondary>,
+    )
+
+    const handle = dragHandleBy(container, -100000, 200)
+    // A huge negative drag shouldn't error or produce a negative width —
+    // it should just clamp at the floor. Children stay collapsed, not broken.
+    expect(screen.getByTestId('a')).toHaveTextContent('true')
+    expect(handle).toBeInTheDocument()
+  })
+
+  it('expands again when dragged back out past the required expanded width, with real slack above the threshold', () => {
+    const { container } = render(
+      <Secondary resizable>
+        <ChildProbe label="a" expanded={50} collapsed={20} />
+      </Secondary>,
+    )
+
+    // First shrink it enough to collapse...
+    dragHandleBy(container, -150, 200)
+    expect(screen.getByTestId('a')).toHaveTextContent('true')
+
+    // ...then drag back out well past the required expanded width (~88).
+    dragHandleBy(container, 500, 50)
+    expect(screen.getByTestId('a')).toHaveTextContent('false')
+    // Regression guard: an earlier version clamped the drag at exactly
+    // requiredExpanded, which is a knife's-edge value in a real browser —
+    // there must be real slack above the threshold, not a value pinned to it.
+    expect(parseFloat((container.firstChild as HTMLElement).style.width)).toBeGreaterThan(200)
   })
 })

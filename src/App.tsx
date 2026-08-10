@@ -89,7 +89,7 @@ function AppContent() {
           once it can't collapse any further.
         </Paragraph>
       </Secondary>
-      <Secondary style={{ marginTop: 12 }}>
+      <Secondary resizable style={{ marginTop: 12 }}>
         <Button icon={<SaveIcon />} label="Save" onClick={() => console.log('save')} />
         <Button icon={<CancelIcon />} label="Cancel" />
         <Input icon={<WidthIcon />} label="Width" value={width} onChange={setWidth} />

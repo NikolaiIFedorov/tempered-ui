@@ -1,5 +1,5 @@
 import { Children, isValidElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import {
   CollapseProvider,
   DirectionProvider,
@@ -15,6 +15,7 @@ import { computeSize } from './tokens'
 export interface SecondaryProps {
   direction?: 'row' | 'column'
   hidden?: boolean
+  resizable?: boolean
   children: ReactNode
   style?: CSSProperties
   className?: string
@@ -25,10 +26,12 @@ const PADDING_SCALE = { baseSize: 12, shrinkRatio: 0.6, minSize: 4 }
 // Fillets (border-radius) aren't a token of their own — they're derived
 // straight from padding, scaling proportionally with it for free.
 const RADIUS_RATIO = 0.5
+const HANDLE_WIDTH = 6
 
 export function Secondary({
   direction = 'row',
   hidden = false,
+  resizable = false,
   children,
   style,
   className,
@@ -59,6 +62,14 @@ export function Secondary({
   const [ownCollapsed, setOwnCollapsed] = useState(false)
   const [footprint, setFootprint] = useState<MinSizeEntry | null>(null)
   const collapsed = selfMeasures ? ownCollapsed : ancestorCollapsed
+  // The user-dragged width override, if any — reusing the exact same
+  // measurement pipeline a real viewport resize goes through: this becomes
+  // the measurement wrapper's explicit width, so the same ResizeObserver
+  // and recompute() that already handle viewport shrinkage handle a drag
+  // shrink too. null means "no override, size naturally."
+  const [dragWidth, setDragWidth] = useState<number | null>(null)
+  const requiredRef = useRef({ expanded: 0, collapsed: 0 })
+  const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
   const recompute = useCallback(
     (availableSize: number) => {
@@ -68,11 +79,14 @@ export function Secondary({
         requiredExpanded += entry.expanded
         requiredCollapsed += entry.collapsed
       }
+      const showsHandle = resizable && selfMeasures
+      const itemCount = entries.current.size + (showsHandle ? 1 : 0)
       const gap = computeSize(layer, GAP_SCALE)
-      const gapTotal = gap * Math.max(0, entries.current.size - 1)
+      const gapTotal = gap * Math.max(0, itemCount - 1)
       const paddingTotal = computeSize(layer, PADDING_SCALE) * 2
-      requiredExpanded += gapTotal + paddingTotal
-      requiredCollapsed += gapTotal + paddingTotal
+      const handleTotal = showsHandle ? HANDLE_WIDTH : 0
+      requiredExpanded += gapTotal + paddingTotal + handleTotal
+      requiredCollapsed += gapTotal + paddingTotal + handleTotal
 
       setFootprint((previous) =>
         previous &&
@@ -82,11 +96,27 @@ export function Secondary({
           : { expanded: requiredExpanded, collapsed: requiredCollapsed },
       )
 
+      requiredRef.current = { expanded: requiredExpanded, collapsed: requiredCollapsed }
+      // If children changed and the current drag width now falls below the
+      // new floor (e.g. a child was removed and requiredCollapsed grew),
+      // re-clamp rather than leave a stale, out-of-range width in place.
+      // No upper re-clamp: dragging wider than natural content is fine —
+      // the wrapper's own maxWidth: 100% is the real ceiling (true
+      // available space), not requiredExpanded. Capping at exactly
+      // requiredExpanded created a knife's-edge value: the JS-computed
+      // clamp and what the real browser reports back through
+      // ResizeObserver after layout don't perfectly agree (subpixel
+      // rounding), so a drag aimed at "fully expanded" would land just
+      // under the threshold and stay collapsed no matter how far dragged.
+      setDragWidth((previous) =>
+        previous === null ? previous : Math.max(requiredCollapsed, previous),
+      )
+
       if (selfMeasures && hasMeasured.current) {
         setOwnCollapsed(availableSize < requiredExpanded)
       }
     },
-    [layer, selfMeasures],
+    [layer, selfMeasures, resizable],
   )
 
   // Reports this Secondary's own aggregate footprint to its ancestor's
@@ -124,6 +154,28 @@ export function Secondary({
     return () => observer.disconnect()
   }, [recompute, selfMeasures])
 
+  const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!containerRef.current) return
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragStateRef.current = {
+      startX: event.clientX,
+      startWidth: containerRef.current.getBoundingClientRect().width,
+    }
+  }, [])
+
+  const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragStateRef.current) return
+    const raw = dragStateRef.current.startWidth + (event.clientX - dragStateRef.current.startX)
+    setDragWidth(Math.max(requiredRef.current.collapsed, raw))
+  }, [])
+
+  const handlePointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    dragStateRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }, [])
+
   if (hidden) return null
 
   const background = theme.resolveBase(layer)
@@ -159,6 +211,22 @@ export function Secondary({
           {child}
         </div>
       ))}
+      {resizable && selfMeasures ? (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          style={{
+            flexShrink: 0,
+            alignSelf: 'stretch',
+            width: 6,
+            cursor: 'col-resize',
+            touchAction: 'none',
+          }}
+        />
+      ) : null}
     </div>
   )
 
@@ -175,7 +243,10 @@ export function Secondary({
               // collapse decision back as "not enough room" and get stuck.
               // This invisible width: 100% wrapper is what's measured; the
               // fit-content, visually-styled row lives inside it, unmeasured.
-              <div ref={containerRef} style={{ width: '100%' }}>
+              // A drag sets an explicit width instead of 100% — maxWidth
+              // still applies, so a real viewport shrink below the dragged
+              // width still wins and gets measured correctly.
+              <div ref={containerRef} style={{ width: dragWidth ?? '100%', maxWidth: '100%' }}>
                 {flexRow}
               </div>
             ) : (
