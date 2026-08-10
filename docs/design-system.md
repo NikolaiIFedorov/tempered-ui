@@ -95,9 +95,11 @@ children:
    label. Its collapsed `minSize` floor is much smaller than expanded.
 2. A Primary with no icon (paragraph, plain label) collapses to a
    fixed-width ellipsized fragment instead.
-3. If children still don't fit after every Primary has collapsed, remaining
-   overflow is hidden behind a "+N more" affordance rather than clipped
-   silently.
+3. If children still don't fit after every Primary has collapsed, the
+   container falls back to scrolling along its own layout axis rather than
+   clipping or hiding anything — children don't flex-shrink past their
+   collapsed size, so the browser overflows into a scrollbar instead of
+   squashing content.
 
 Collapse is driven purely by measured available space vs. computed minimum —
 `layer` does not gate whether collapse can happen, only how large the
