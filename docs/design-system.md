@@ -101,15 +101,23 @@ children:
    collapsed size, so the browser overflows into a scrollbar instead of
    squashing content.
 
-Collapse cascades: once a Secondary collapses, every Primary nested under
-it collapses too, including ones inside a nested Secondary — a nested
-Secondary doesn't get to independently decide to stay expanded just
-because it has enough room for itself. A nested Secondary can still
-collapse earlier than its ancestor if its own space runs out first.
+Only the root Secondary (`layer 0`, no enclosing Secondary) measures its
+own available space — a nested Secondary is always wrapped in
+`flexShrink: 0` by its parent, so its box can never actually be squeezed
+by row layout, and self-measuring it is not just unnecessary but actively
+wrong: collapsing shrinks its content, which shrinks its own box, which a
+naive self-measurement would misread as "still too small" and get stuck
+on even after the real cause goes away. Every nested Secondary instead
+purely inherits its collapse state from its nearest ancestor Secondary —
+once the root collapses, every Primary nested beneath it collapses too,
+at any depth.
 
-Collapse is driven purely by measured available space vs. computed minimum —
-`layer` does not gate whether collapse can happen, only how large the
-uncollapsed baseline was to begin with.
+A nested Secondary still contributes to whether its *ancestor* needs to
+collapse: it reports its own aggregate footprint (the sum of its own
+children, expanded and collapsed) up to the ancestor's threshold
+calculation, the same way a Primary reports its own `minSize`. So the
+root's collapse decision accounts for nested subtrees even though only
+the root does any actual measuring.
 
 ## Animation speed
 
