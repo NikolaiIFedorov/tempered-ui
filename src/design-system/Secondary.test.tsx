@@ -122,3 +122,43 @@ describe('Secondary collapse', () => {
     expect(screen.queryByTestId('a')).not.toBeInTheDocument()
   })
 })
+
+describe('Secondary overflow (scroll fallback for when even collapsed children do not fit)', () => {
+  it('scrolls along the row axis and clips the cross axis by default', () => {
+    const { container } = render(
+      <Secondary>
+        <ChildProbe label="a" expanded={50} collapsed={20} />
+      </Secondary>,
+    )
+
+    expect(container.firstChild).toHaveStyle({
+      overflowX: 'auto',
+      overflowY: 'hidden',
+    })
+  })
+
+  it('scrolls along the column axis and clips the cross axis when direction is column', () => {
+    const { container } = render(
+      <Secondary direction="column">
+        <ChildProbe label="a" expanded={50} collapsed={20} />
+      </Secondary>,
+    )
+
+    expect(container.firstChild).toHaveStyle({
+      overflowX: 'hidden',
+      overflowY: 'auto',
+    })
+  })
+
+  it('keeps each child from flex-shrinking below its own size, so overflow scrolls instead of squashing content', () => {
+    render(
+      <Secondary>
+        <ChildProbe label="a" expanded={50} collapsed={20} />
+      </Secondary>,
+    )
+
+    expect(screen.getByTestId('a').parentElement).toHaveStyle({
+      flexShrink: '0',
+    })
+  })
+})

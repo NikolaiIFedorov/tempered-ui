@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Children, isValidElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { CollapseProvider, LayerProvider, useOwnSecondaryLayer } from './layer'
 import { type MinSizeEntry, MinSizeRegistryProvider } from './registry'
@@ -74,9 +74,18 @@ export function Secondary({ direction = 'row', hidden = false, children }: Secon
               display: 'flex',
               flexDirection: direction,
               gap: computeSize(layer, GAP_SCALE),
+              overflowX: direction === 'row' ? 'auto' : 'hidden',
+              overflowY: direction === 'row' ? 'hidden' : 'auto',
             }}
           >
-            {children}
+            {Children.map(children, (child, index) => (
+              <div
+                key={isValidElement(child) && child.key !== null ? child.key : index}
+                style={{ flexShrink: 0 }}
+              >
+                {child}
+              </div>
+            ))}
           </div>
         </MinSizeRegistryProvider>
       </CollapseProvider>
