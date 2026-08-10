@@ -75,13 +75,14 @@ out to pure white or black.
 Accent color tries the OS accent color first, falling back to a curated
 default when that isn't available:
 
-1. Render an offscreen element with `color: AccentColor` (CSS Color 4 system
-   color keyword) and read back the resolved value via `getComputedStyle`.
-2. Support is inconsistent — solid in Chromium, partial in Firefox, absent
-   in Safari (no real OS value is resolved there). Treat a missing or
-   generic-looking result as a failure, not a valid accent.
-3. On failure, fall back to a curated default accent hue baked into the
-   theme, run through the same `L(layer)` equation as every other role.
+1. Feature-detect with `CSS.supports('color', 'AccentColor')` — Chromium and
+   Firefox recognize the keyword as valid syntax, Safari doesn't, so this is
+   a clean pass/fail signal rather than guessing from a resolved value.
+2. If supported, render an offscreen element with `color: AccentColor`, read
+   the resolved value via `getComputedStyle`, and convert it to OKLCH.
+3. If unsupported (or conversion fails), fall back to a curated default
+   accent hue baked into the theme, run through the same `L(layer)`
+   equation as every other role.
 
 ## Collapse
 
