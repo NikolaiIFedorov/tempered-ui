@@ -1,6 +1,6 @@
 import { Children, isValidElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { CollapseProvider, LayerProvider, useOwnSecondaryLayer } from './layer'
+import { CollapseProvider, LayerProvider, useCollapsed, useOwnSecondaryLayer } from './layer'
 import { type MinSizeEntry, MinSizeRegistryProvider } from './registry'
 import { computeSize } from './tokens'
 
@@ -14,11 +14,13 @@ const GAP_SCALE = { baseSize: 8, shrinkRatio: 0.85, minSize: 2 }
 
 export function Secondary({ direction = 'row', hidden = false, children }: SecondaryProps) {
   const layer = useOwnSecondaryLayer()
+  const ancestorCollapsed = useCollapsed()
   const containerRef = useRef<HTMLDivElement>(null)
   const entries = useRef(new Map<string, MinSizeEntry>())
   const lastAvailableSize = useRef(0)
   const hasMeasured = useRef(false)
-  const [collapsed, setCollapsed] = useState(false)
+  const [ownCollapsed, setOwnCollapsed] = useState(false)
+  const collapsed = ancestorCollapsed || ownCollapsed
 
   const recompute = useCallback(
     (availableSize: number) => {
@@ -28,7 +30,7 @@ export function Secondary({ direction = 'row', hidden = false, children }: Secon
       }
       const gap = computeSize(layer, GAP_SCALE)
       required += gap * Math.max(0, entries.current.size - 1)
-      setCollapsed(availableSize < required)
+      setOwnCollapsed(availableSize < required)
     },
     [layer],
   )
