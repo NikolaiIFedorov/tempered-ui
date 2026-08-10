@@ -80,7 +80,7 @@ function AppContent() {
         minHeight: '100vh',
         padding: 16,
         fontFamily: 'sans-serif',
-        backgroundColor: toCssColor(theme.resolveBase(-1)),
+        backgroundColor: toCssColor(theme.resolveCanvas()),
       }}
     >
       <Secondary direction="column">

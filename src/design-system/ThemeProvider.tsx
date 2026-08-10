@@ -16,6 +16,7 @@ export interface ThemeContextValue {
   darkMode: boolean
   resolveBase: (layer: number) => OklchColor
   resolveAccent: (layer: number) => OklchColor
+  resolveCanvas: () => OklchColor
 }
 
 function buildThemeValue(darkMode: boolean, accentRole: ColorRole): ThemeContextValue {
@@ -23,6 +24,13 @@ function buildThemeValue(darkMode: boolean, accentRole: ColorRole): ThemeContext
     darkMode,
     resolveBase: (layer) => resolveRoleColor(BASE_ROLE, layer, { darkMode, lStep: L_STEP }),
     resolveAccent: (layer) => resolveRoleColor(accentRole, layer, { darkMode, lStep: L_STEP }),
+    // The page canvas, not a Secondary layer — the true unclamped extreme
+    // (pure black/white), not resolveBase(-1). lMin/lMax exist to stop deep
+    // *nesting* from washing a surface out to an extreme; the canvas isn't
+    // a nested surface at risk of that, it's the one thing that's supposed
+    // to reach the extreme, so clamping it defeats the point of using it as
+    // the reference layer 0 steps away from.
+    resolveCanvas: () => ({ l: darkMode ? 0 : 1, c: BASE_ROLE.chroma, h: BASE_ROLE.hue }),
   }
 }
 

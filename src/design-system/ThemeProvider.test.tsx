@@ -22,12 +22,14 @@ function Probe() {
   const theme = useTheme()
   const base0 = theme.resolveBase(0)
   const accent0 = theme.resolveAccent(0)
+  const canvas = theme.resolveCanvas()
   return (
     <div>
       <div data-testid="dark-mode">{String(theme.darkMode)}</div>
       <div data-testid="base-l">{base0.l}</div>
       <div data-testid="accent-l">{accent0.l}</div>
       <div data-testid="accent-h">{accent0.h}</div>
+      <div data-testid="canvas-l">{canvas.l}</div>
     </div>
   )
 }
@@ -95,5 +97,22 @@ describe('ThemeProvider', () => {
     )
 
     expect(screen.getByTestId('accent-l')).toBeInTheDocument()
+  })
+
+  it('resolves the canvas to the true unclamped extreme, a full Lstep away from layer 0', () => {
+    const mql = fakeMediaQueryList(true)
+    vi.stubGlobal('window', { matchMedia: () => mql })
+    vi.stubGlobal('CSS', { supports: () => false })
+
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    )
+
+    // Dark mode: canvas is pure black (0), unaffected by lMin clamping.
+    expect(screen.getByTestId('canvas-l')).toHaveTextContent('0')
+    const baseL = Number(screen.getByTestId('base-l').textContent)
+    expect(baseL).toBeGreaterThan(0)
   })
 })
