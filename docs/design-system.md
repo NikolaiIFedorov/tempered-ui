@@ -51,8 +51,28 @@ raw RGB — equal steps in `L` read as equal perceptual steps, so color does
 L(layer) = clamp(baseL + sign * layer * Lstep, Lmin, Lmax)
 ```
 
-Hue and chroma stay fixed per semantic role (surface, accent, danger, ...) —
-only lightness moves with layer.
+There are exactly two color roles, kept deliberately open-ended-free per
+the "as simple as possible" direction: `base` (neutral, every background)
+and `accent` (OS-detected, see below). Hue and chroma stay fixed per role
+— only lightness moves with layer, through the identical equation for
+both. A `danger` role is deferred until an actual destructive action
+exists to consume it, rather than built speculatively.
+
+Text/icon color is not a third layer-stepped role — it's ink: whichever
+of pure black or white clears the WCAG 2.x relative-luminance contrast
+ratio more strongly against the specific background it's rendered on
+(the real ratio, via culori's `wcagContrast` — an OKLCH lightness delta
+alone isn't an equivalent stand-in for it). Ink doesn't need its own
+equation because its only job is staying legible against whatever
+background it sits on, not expressing nesting depth. A component with no
+background of its own (Paragraph, Input's label prefix) computes ink
+against whatever surface it's actually sitting on — its enclosing
+Secondary's own background at that same layer.
+
+Backgrounds one layer "deeper" than their surroundings (Button, Input's
+field) resolve `base` at `layer + 1` rather than introducing a separate
+"raised surface" concept — reusing the same equation for elevation that
+nesting already uses.
 
 `darkMode` comes from `window.matchMedia('(prefers-color-scheme: dark)')`,
 listened to via its `change` event so the theme repaints live if the user
@@ -82,7 +102,7 @@ default when that isn't available:
    the resolved value via `getComputedStyle`, and convert it to OKLCH.
 3. If unsupported (or conversion fails), fall back to a curated default
    accent hue baked into the theme, run through the same `L(layer)`
-   equation as every other role.
+   equation as the base role.
 
 ## Collapse
 
