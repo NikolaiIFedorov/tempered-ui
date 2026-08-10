@@ -10,7 +10,7 @@ import {
 
 const BASE_ROLE: ColorRole = { hue: 250, chroma: 0.015, lMin: 0.05, lMax: 0.95 }
 const DEFAULT_ACCENT_ROLE: ColorRole = { hue: 250, chroma: 0.15, lMin: 0.2, lMax: 0.8 }
-const L_STEP = 0.15
+const L_STEP = 0.22
 
 export interface ThemeContextValue {
   darkMode: boolean
