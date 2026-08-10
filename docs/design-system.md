@@ -101,6 +101,12 @@ children:
    collapsed size, so the browser overflows into a scrollbar instead of
    squashing content.
 
+Collapse cascades: once a Secondary collapses, every Primary nested under
+it collapses too, including ones inside a nested Secondary — a nested
+Secondary doesn't get to independently decide to stay expanded just
+because it has enough room for itself. A nested Secondary can still
+collapse earlier than its ancestor if its own space runs out first.
+
 Collapse is driven purely by measured available space vs. computed minimum —
 `layer` does not gate whether collapse can happen, only how large the
 uncollapsed baseline was to begin with.
