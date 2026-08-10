@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 import { useCollapsed, useLayer } from './layer'
 import { computeCollapsedContentWidth, PrimaryContent } from './PrimaryContent'
 import { useMinSizeRegistration } from './registry'
+import { computeInkColor, toCssColor } from './theme'
+import { useTheme } from './ThemeProvider'
 import { computeSize } from './tokens'
 
 export interface ButtonProps {
@@ -17,6 +19,7 @@ const PADDING_SCALE = { baseSize: 12, shrinkRatio: 0.85, minSize: 4 }
 export function Button({ icon, label, onClick, disabled }: ButtonProps) {
   const layer = useLayer()
   const collapsed = useCollapsed()
+  const theme = useTheme()
   const padding = computeSize(layer, PADDING_SCALE)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const [expandedWidth, setExpandedWidth] = useState<number | null>(null)
@@ -36,8 +39,25 @@ export function Button({ icon, label, onClick, disabled }: ButtonProps) {
     expandedWidth === null ? null : { expanded: expandedWidth, collapsed: collapsedWidth },
   )
 
+  // One layer deeper than the enclosing Secondary's own background — reuses
+  // the same layer equation to give the button a distinct surface rather
+  // than introducing a separate "raised" concept.
+  const background = theme.resolveBase(layer + 1)
+  const ink = computeInkColor(background)
+
   return (
-    <button ref={buttonRef} type="button" onClick={onClick} disabled={disabled} style={{ padding }}>
+    <button
+      ref={buttonRef}
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        padding,
+        border: 'none',
+        backgroundColor: toCssColor(background),
+        color: toCssColor(ink),
+      }}
+    >
       <PrimaryContent icon={icon} label={label} />
     </button>
   )

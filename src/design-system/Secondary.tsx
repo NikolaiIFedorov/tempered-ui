@@ -2,6 +2,8 @@ import { Children, isValidElement, useCallback, useEffect, useMemo, useRef, useS
 import type { CSSProperties, ReactNode } from 'react'
 import { CollapseProvider, LayerProvider, useCollapsed, useOwnSecondaryLayer } from './layer'
 import { type MinSizeEntry, MinSizeRegistryProvider, useMinSizeRegistration } from './registry'
+import { computeInkColor, toCssColor } from './theme'
+import { useTheme } from './ThemeProvider'
 import { computeSize } from './tokens'
 
 export interface SecondaryProps {
@@ -13,6 +15,7 @@ export interface SecondaryProps {
 }
 
 const GAP_SCALE = { baseSize: 8, shrinkRatio: 0.85, minSize: 2 }
+const PADDING_SCALE = { baseSize: 12, shrinkRatio: 0.85, minSize: 4 }
 
 export function Secondary({
   direction = 'row',
@@ -23,6 +26,7 @@ export function Secondary({
 }: SecondaryProps) {
   const layer = useOwnSecondaryLayer()
   const ancestorCollapsed = useCollapsed()
+  const theme = useTheme()
   // A Secondary nested inside another Secondary is always wrapped in
   // flexShrink: 0 by its parent, so its own box can never actually be
   // squeezed by row layout — only the root (no ancestor Secondary) has a
@@ -48,8 +52,9 @@ export function Secondary({
       }
       const gap = computeSize(layer, GAP_SCALE)
       const gapTotal = gap * Math.max(0, entries.current.size - 1)
-      requiredExpanded += gapTotal
-      requiredCollapsed += gapTotal
+      const paddingTotal = computeSize(layer, PADDING_SCALE) * 2
+      requiredExpanded += gapTotal + paddingTotal
+      requiredCollapsed += gapTotal + paddingTotal
 
       setFootprint((previous) =>
         previous &&
@@ -104,6 +109,9 @@ export function Secondary({
 
   if (hidden) return null
 
+  const background = theme.resolveBase(layer)
+  const ink = computeInkColor(background)
+
   const flexRow = (
     <div
       className={className}
@@ -116,6 +124,9 @@ export function Secondary({
         width: 'fit-content',
         maxWidth: '100%',
         gap: computeSize(layer, GAP_SCALE),
+        padding: computeSize(layer, PADDING_SCALE),
+        backgroundColor: toCssColor(background),
+        color: toCssColor(ink),
         overflowX: direction === 'row' ? 'auto' : 'hidden',
         overflowY: direction === 'row' ? 'hidden' : 'auto',
         ...style,

@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  computeInkColor,
   isAccentColorSupported,
   resolveAccentColor,
   resolveRoleColor,
+  toCssColor,
   watchDarkMode,
 } from './theme'
 
@@ -18,6 +20,31 @@ describe('resolveRoleColor', () => {
     expect(layer1.l).toBeCloseTo(0.16)
     expect(layer1.c).toBe(0.1)
     expect(layer1.h).toBe(250)
+  })
+})
+
+describe('computeInkColor', () => {
+  it('picks near-white ink for a dark background', () => {
+    const ink = computeInkColor({ l: 0.1, c: 0.02, h: 250 })
+    expect(ink).toEqual({ l: 1, c: 0, h: 0 })
+  })
+
+  it('picks near-black ink for a light background', () => {
+    const ink = computeInkColor({ l: 0.9, c: 0.02, h: 250 })
+    expect(ink).toEqual({ l: 0, c: 0, h: 0 })
+  })
+
+  it('picks whichever extreme wins even for a mid-lightness background', () => {
+    const darkSideInk = computeInkColor({ l: 0.4, c: 0, h: 0 })
+    const lightSideInk = computeInkColor({ l: 0.6, c: 0, h: 0 })
+    expect(darkSideInk.l).toBe(1)
+    expect(lightSideInk.l).toBe(0)
+  })
+})
+
+describe('toCssColor', () => {
+  it('formats an OKLCH color as a CSS oklch() function', () => {
+    expect(toCssColor({ l: 0.5, c: 0.1, h: 250 })).toBe('oklch(0.5 0.1 250)')
   })
 })
 

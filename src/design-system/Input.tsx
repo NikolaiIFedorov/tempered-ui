@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 import { useCollapsed, useLayer } from './layer'
 import { computeCollapsedContentWidth, PrimaryContent } from './PrimaryContent'
 import { useMinSizeRegistration } from './registry'
+import { computeInkColor, toCssColor } from './theme'
+import { useTheme } from './ThemeProvider'
 import { computeSize } from './tokens'
 
 export interface InputProps {
@@ -21,6 +23,7 @@ const PADDING_SCALE = { baseSize: 6, shrinkRatio: 0.85, minSize: 2 }
 export function Input({ icon, label, value, onChange, placeholder, disabled }: InputProps) {
   const layer = useLayer()
   const collapsed = useCollapsed()
+  const theme = useTheme()
   const fieldWidth = computeSize(layer, FIELD_WIDTH_SCALE)
   const gap = computeSize(layer, GAP_SCALE)
   const padding = computeSize(layer, PADDING_SCALE)
@@ -49,12 +52,20 @@ export function Input({ icon, label, value, onChange, placeholder, disabled }: I
         },
   )
 
+  // The prefix sits directly on the enclosing Secondary's own background
+  // (it has no background of its own), so its ink matches that surface.
+  // The field is its own surface, one layer deeper, same as Button.
+  const prefixInk = computeInkColor(theme.resolveBase(layer))
+  const fieldBackground = theme.resolveBase(layer + 1)
+  const fieldInk = computeInkColor(fieldBackground)
+
   return (
     <label
       style={{
         display: 'inline-flex',
         alignItems: 'center',
         gap,
+        color: toCssColor(prefixInk),
       }}
     >
       <span ref={prefixRef} style={{ display: 'inline-flex', alignItems: 'center' }}>
@@ -66,7 +77,14 @@ export function Input({ icon, label, value, onChange, placeholder, disabled }: I
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        style={{ width: fieldWidth, padding, boxSizing: 'border-box' }}
+        style={{
+          width: fieldWidth,
+          padding,
+          boxSizing: 'border-box',
+          border: 'none',
+          backgroundColor: toCssColor(fieldBackground),
+          color: toCssColor(fieldInk),
+        }}
       />
     </label>
   )

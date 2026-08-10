@@ -3,6 +3,8 @@ import { Button } from './design-system/Button'
 import { Input } from './design-system/Input'
 import { Paragraph } from './design-system/Paragraph'
 import { Secondary } from './design-system/Secondary'
+import { toCssColor } from './design-system/theme'
+import { ThemeProvider, useTheme } from './design-system/ThemeProvider'
 
 function SaveIcon() {
   return (
@@ -68,16 +70,24 @@ function ExtrudeIcon() {
   )
 }
 
-function App() {
+function AppContent() {
   const [width, setWidth] = useState('42')
+  const theme = useTheme()
 
   return (
-    <div style={{ padding: 16, fontFamily: 'sans-serif' }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        padding: 16,
+        fontFamily: 'sans-serif',
+        backgroundColor: toCssColor(theme.resolveBase(0)),
+      }}
+    >
       <Paragraph>
         Design-system demo — shrink the window to see the toolbar collapse to icons, then scroll
         once it can't collapse any further.
       </Paragraph>
-      <Secondary style={{ marginTop: 12, border: '1px solid #ccc' }}>
+      <Secondary style={{ marginTop: 12 }}>
         <Button icon={<SaveIcon />} label="Save" onClick={() => console.log('save')} />
         <Button icon={<CancelIcon />} label="Cancel" />
         <Input icon={<WidthIcon />} label="Width" value={width} onChange={setWidth} />
@@ -86,6 +96,14 @@ function App() {
         </Secondary>
       </Secondary>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   )
 }
 

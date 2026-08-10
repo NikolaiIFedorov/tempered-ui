@@ -1,4 +1,4 @@
-import { converter } from 'culori'
+import { converter, wcagContrast } from 'culori'
 import { computeLightness } from './tokens'
 
 export interface OklchColor {
@@ -25,6 +25,24 @@ export function resolveRoleColor(
     lMax: role.lMax,
   })
   return { l, c: role.chroma, h: role.hue }
+}
+
+const WHITE: OklchColor = { l: 1, c: 0, h: 0 }
+const BLACK: OklchColor = { l: 0, c: 0, h: 0 }
+
+// Picks whichever of pure black/white clears the WCAG 2.x relative-luminance
+// contrast ratio (AA normal text = 4.5:1) more strongly against the given
+// background. culori's wcagContrast implements the real ratio — an OKLCH
+// lightness delta alone isn't an equivalent stand-in for it.
+export function computeInkColor(background: OklchColor): OklchColor {
+  const bg = { mode: 'oklch' as const, ...background }
+  const contrastWithWhite = wcagContrast(bg, { mode: 'oklch', ...WHITE })
+  const contrastWithBlack = wcagContrast(bg, { mode: 'oklch', ...BLACK })
+  return contrastWithWhite >= contrastWithBlack ? WHITE : BLACK
+}
+
+export function toCssColor(color: OklchColor): string {
+  return `oklch(${color.l} ${color.c} ${color.h})`
 }
 
 const toOklch = converter('oklch')

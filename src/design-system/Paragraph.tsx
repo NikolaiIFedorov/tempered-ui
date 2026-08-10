@@ -2,6 +2,8 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { useCollapsed, useLayer } from './layer'
 import { computeCollapsedContentWidth, PrimaryContent } from './PrimaryContent'
 import { useMinSizeRegistration } from './registry'
+import { computeInkColor, toCssColor } from './theme'
+import { useTheme } from './ThemeProvider'
 import { computeSize } from './tokens'
 
 export interface ParagraphProps {
@@ -13,6 +15,7 @@ const FONT_SIZE_SCALE = { baseSize: 14, shrinkRatio: 0.9, minSize: 10 }
 export function Paragraph({ children }: ParagraphProps) {
   const layer = useLayer()
   const collapsed = useCollapsed()
+  const theme = useTheme()
   const fontSize = computeSize(layer, FONT_SIZE_SCALE)
   const paragraphRef = useRef<HTMLParagraphElement>(null)
   const [expandedWidth, setExpandedWidth] = useState<number | null>(null)
@@ -29,8 +32,12 @@ export function Paragraph({ children }: ParagraphProps) {
     expandedWidth === null ? null : { expanded: expandedWidth, collapsed: collapsedWidth },
   )
 
+  // Paragraph has no background of its own — it sits directly on whatever
+  // its enclosing Secondary paints, so its ink matches that same surface.
+  const ink = computeInkColor(theme.resolveBase(layer))
+
   return (
-    <p ref={paragraphRef} style={{ fontSize, margin: 0 }}>
+    <p ref={paragraphRef} style={{ fontSize, margin: 0, color: toCssColor(ink) }}>
       <PrimaryContent label={children} />
     </p>
   )
