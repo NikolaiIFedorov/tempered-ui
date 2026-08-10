@@ -90,6 +90,13 @@ single constant governing both the base offset and the per-layer increment.
 `Lmin`/`Lmax` clamp the band per role so deep nesting can't wash a surface
 out to pure white or black.
 
+The page canvas itself is `layer -1` in this same equation — not a special
+case, just the one layer further toward the true extreme than layer 0
+already is. A layer-0 Secondary needs to look visually distinct from the
+bare page it sits on, and `L(-1)` gives exactly that for free: pure
+black/white before the `Lstep` offset (or the extreme after `Lmin`/`Lmax`
+clamping) rather than colliding with `L(0)`.
+
 ### Accent color
 
 Accent color tries the OS accent color first, falling back to a curated
@@ -138,6 +145,14 @@ children, expanded and collapsed) up to the ancestor's threshold
 calculation, the same way a Primary reports its own `minSize`. So the
 root's collapse decision accounts for nested subtrees even though only
 the root does any actual measuring.
+
+A registering Primary measures whichever axis its nearest enclosing
+Secondary actually lays children out on and compares against — width for
+`direction="row"`, height for `direction="column"`. Collapsing only ever
+hides a label horizontally; it never changes how tall a Primary renders.
+So along the height axis, the collapsed footprint a Primary reports is
+just the same measured size as its expanded one — only the width axis
+needs the analytical icon/ellipsis-based formula.
 
 ## Animation speed
 
