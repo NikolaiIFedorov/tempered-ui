@@ -199,26 +199,28 @@ describe('nested Secondary collapse cascade', () => {
 
 describe('Secondary overflow (scroll fallback for when even collapsed children do not fit)', () => {
   it('scrolls along the row axis and clips the cross axis by default', () => {
-    const { container } = render(
+    render(
       <Secondary>
         <ChildProbe label="a" expanded={50} collapsed={20} />
       </Secondary>,
     )
 
-    expect(container.firstChild).toHaveStyle({
+    // The styled row is one level inside the always-100%-wide measurement
+    // wrapper — it's the row that scrolls, not the wrapper.
+    expect(screen.getByTestId('a').closest('div[style*="overflow"]')).toHaveStyle({
       overflowX: 'auto',
       overflowY: 'hidden',
     })
   })
 
   it('scrolls along the column axis and clips the cross axis when direction is column', () => {
-    const { container } = render(
+    render(
       <Secondary direction="column">
         <ChildProbe label="a" expanded={50} collapsed={20} />
       </Secondary>,
     )
 
-    expect(container.firstChild).toHaveStyle({
+    expect(screen.getByTestId('a').closest('div[style*="overflow"]')).toHaveStyle({
       overflowX: 'hidden',
       overflowY: 'auto',
     })
