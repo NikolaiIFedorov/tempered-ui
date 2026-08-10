@@ -1,0 +1,30 @@
+import { createContext, useContext, useEffect, useId } from 'react'
+
+export interface MinSizeEntry {
+  expanded: number
+  collapsed: number
+}
+
+export interface MinSizeRegistry {
+  register: (id: string, entry: MinSizeEntry) => void
+  unregister: (id: string) => void
+}
+
+const MinSizeRegistryContext = createContext<MinSizeRegistry | null>(null)
+
+export const MinSizeRegistryProvider = MinSizeRegistryContext.Provider
+
+export function useMinSizeRegistration(entry: MinSizeEntry | null): void {
+  const registry = useContext(MinSizeRegistryContext)
+  const id = useId()
+  const expanded = entry?.expanded
+  const collapsed = entry?.collapsed
+
+  useEffect(() => {
+    if (!registry || expanded === undefined || collapsed === undefined) {
+      return
+    }
+    registry.register(id, { expanded, collapsed })
+    return () => registry.unregister(id)
+  }, [registry, id, expanded, collapsed])
+}
