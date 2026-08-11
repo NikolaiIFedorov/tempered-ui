@@ -8,10 +8,9 @@ where the component type has a meaningful icon; icon-less types (paragraph,
 plain label) omit it rather than forcing a placeholder. **Secondary**
 components are containers: they arrange a list of Primary components, or nest
 another Secondary component. Secondary components are the only unit that can
-be hidden, reordered, or resized by the user (panels, toolbars, docked
-groups) — a Primary's own footprint is always a function of its content and
-its enclosing Secondary's collapse state, never something the user drags
-independently.
+be hidden or reordered by the user (panels, toolbars, docked groups) — a
+Primary's own footprint is always a function of its content and its
+enclosing Secondary's collapse state.
 
 ## Layer
 
@@ -179,75 +178,6 @@ So along the height axis, the collapsed footprint a Primary reports is
 just the same measured size as its expanded one — only the width axis
 needs the analytical icon/ellipsis-based formula.
 
-## Resize
-
-Only a Secondary is user-resizable — a Primary's size always follows from
-its content and its enclosing Secondary's collapse state, never from its
-own drag handle. Dragging a Secondary's handle toggles it between fully
-expanded and fully collapsed, snapping partway through the drag, rather
-than resolving to an arbitrary width: a Secondary's job is organizing its
-children, and how much of that organization is currently visible is
-inherently a two-state decision — the same one collapse already makes for
-it, just now user-driven instead of purely space-driven. `resizable`
-grants a Secondary a drag handle; it doesn't broadcast anything downward,
-since no Primary needs the capability.
-
-The drag still tracks the cursor the way a continuous resize would (a
-start width plus the raw pointer delta), but only to decide which side of
-the midpoint between the expanded and collapsed footprints the cursor
-lands on — the box snaps to that footprint's exact width live as soon as
-the midpoint is crossed, not to wherever the cursor currently sits. This
-mirrors the read of the reordering swap-preview in Reposition: the result
-is decided by a threshold crossing, not tracked continuously.
-
-**Root Secondary (`layer 0`, `direction="row"`).** Snapping to collapsed
-sets the measurement wrapper's width to the exact `requiredCollapsed`
-value — safe, since `ResizeObserver` reporting that back is nowhere near
-the collapse threshold. Snapping to expanded, however, sets the wrapper's
-width back to `100%` (real measured space) rather than an exact
-`requiredExpanded` value: the root re-derives its own collapse by
-comparing `ResizeObserver`'s measured width against that exact same
-threshold, so forcing the two to match precisely is a knife's edge — real
-subpixel rounding in what the browser reports back can read a hair under
-the threshold and immediately re-collapse it. This is the same class of
-bug a continuous drag used to hit trying to clamp its ceiling at exactly
-`requiredExpanded`; binary snapping doesn't remove the risk, it just
-means every "expanded" drag would land exactly on that edge instead of
-occasionally, so deferring to `100%` (the same value used before any drag
-at all) sidesteps it entirely rather than trying to out-precision it.
-
-**Nested Secondary.** It never self-measures (see Collapse), so both snap
-states set its own flex row's width directly to an exact footprint value,
-and its collapse decision is the literal boolean the drag landed on —
-`manualCollapsed`, not something recomputed by measuring the row's own
-rendered size. That's combined with the inherited ancestor cascade via
-OR — a nested Secondary can collapse because *it* was dragged closed, or
-because its ancestor was, whichever comes first. This OR is safe here in
-a way it isn't for self-measurement: the state came from a direct pointer
-threshold crossing, not from a box measuring its own rendered size, so
-there's no self-referential trap, and no knife's edge either — nothing
-here re-derives collapse from a measurement of the snapped width.
-
-A resize handle nested inside an ancestor's own drag surface — e.g. a
-resizable nested Secondary's handle sitting inside the root's reorderable
-item wrapper — needs `event.stopPropagation()` in its pointer handlers;
-without it, the pointerdown bubbles up and the ancestor's own handler
-(reorder, in that example) steals pointer capture for itself, silently
-breaking the nested drag.
-
-A drag ending is never trusted to arrive as a clean `pointerup` alone —
-window blur, a native drag gesture stealing capture, and similar real
-browser situations can all cause it to go missing, which would otherwise
-leave the drag permanently stuck (the handle stays visually active, and
-the next hover keeps moving the size). Every `pointermove` handler also
-checks `event.buttons`, the live truth of whether a button is actually
-still held, and ends the drag the instant it reads `0` even without a
-matching end event. `pointercancel` is handled the same way as a safety
-net for browser-cancelled gestures. Unlike Reposition, this doesn't need
-window-level listeners — a resize handle's own DOM position never moves
-during its drag (only the row's width changes around it), so it isn't
-exposed to the `lostpointercapture` failure mode reordering has.
-
 ## Reposition
 
 An `onReorder` Secondary makes its direct children draggable to reorder
@@ -264,11 +194,11 @@ rather than waiting for the caller's next render. This needs a stable
 key per child to be meaningful; children without an explicit `key` fall
 back to their index, which isn't a meaningful drag target.
 
-Unlike Resize, reordering doesn't use per-element pointer capture at all
-— it tracks the drag with `pointermove`/`pointerup`/`pointercancel`
-listeners on `window` instead, added on pointerdown and removed once the
-drag ends. This isn't a style choice: reordering moves the dragged item's
-own DOM node to a new sibling position on every step (that's how the live
+Reordering doesn't use per-element pointer capture at all — it tracks the
+drag with `pointermove`/`pointerup`/`pointercancel` listeners on `window`
+instead, added on pointerdown and removed once the drag ends. This isn't
+a style choice: reordering moves the dragged item's own DOM node to a
+new sibling position on every step (that's how the live
 preview works), and moving a node that holds native pointer capture makes
 the browser silently drop that capture mid-drag. Once capture is gone,
 the eventual release gets routed by ordinary hit-testing to whatever's
@@ -279,9 +209,12 @@ stuck (dimmed, and still reorderable on the next hover). Listening on
 `window` sidesteps this: delivery no longer depends on which element is
 under the cursor or where the dragged node currently sits in the tree.
 
-A missing `pointerup` is additionally handled the same way described in
-Resize, as a last-resort backstop: a stray `pointermove` with no button
-held commits the live preview as if it were a real release. A genuine
+A missing `pointerup` is additionally handled as a last-resort backstop:
+every `pointermove` handler also checks `event.buttons`, the live truth
+of whether a button is actually still held, and a stray move that reads
+`0` commits the live preview as if it were a real release — window blur,
+a native drag gesture stealing capture, and similar real browser
+situations can all cause the end event itself to go missing. A genuine
 `pointercancel` reverts to the caller's actual order without calling
 `onReorder`, since that's an aborted gesture rather than an intentional
 drop.

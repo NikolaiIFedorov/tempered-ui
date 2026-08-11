@@ -83,11 +83,7 @@ function renderToolbarItem(key: string, width: string, setWidth: (value: string)
         <Input key={key} icon={<WidthIcon />} label="Width" value={width} onChange={setWidth} />
       )
     case 'extrude':
-      return (
-        <Secondary key={key} resizable>
-          <Button icon={<ExtrudeIcon />} label="Extrude" />
-        </Secondary>
-      )
+      return <Button key={key} icon={<ExtrudeIcon />} label="Extrude" />
     default:
       return null
   }
@@ -109,11 +105,11 @@ function AppContent() {
     >
       <Secondary direction="column">
         <Paragraph>
-          Design-system demo — shrink the window to see the toolbar collapse to icons, drag the
-          handle on the right edge to resize it, and drag items to reorder them.
+          Design-system demo — shrink the window to see the toolbar collapse to icons, and drag
+          items to reorder them.
         </Paragraph>
       </Secondary>
-      <Secondary resizable onReorder={setOrder} style={{ marginTop: 12 }}>
+      <Secondary onReorder={setOrder} style={{ marginTop: 12 }}>
         {order.map((key) => renderToolbarItem(key, width, setWidth))}
       </Secondary>
     </div>
