@@ -84,7 +84,7 @@ function renderToolbarItem(key: string, width: string, setWidth: (value: string)
       )
     case 'extrude':
       return (
-        <Secondary key={key}>
+        <Secondary key={key} resizable>
           <Button icon={<ExtrudeIcon />} label="Extrude" />
         </Secondary>
       )

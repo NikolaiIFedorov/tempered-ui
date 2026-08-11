@@ -303,7 +303,7 @@ describe('drag-to-resize', () => {
     expect(screen.queryByRole('separator')).not.toBeInTheDocument()
   })
 
-  it('renders no handle on a nested Secondary even when resizable is set — it has nothing of its own to self-measure', () => {
+  it('renders a handle on a resizable nested Secondary too', () => {
     render(
       <Secondary>
         <ChildProbe label="a" expanded={50} collapsed={20} />
@@ -312,7 +312,66 @@ describe('drag-to-resize', () => {
         </Secondary>
       </Secondary>,
     )
-    expect(screen.queryByRole('separator')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('separator')).toHaveLength(1)
+  })
+
+  it('lets a resizable nested Secondary collapse its own primaries via drag, independent of its ancestor', () => {
+    render(
+      <Secondary>
+        <ChildProbe label="a" expanded={50} collapsed={20} />
+        <Secondary resizable>
+          <ChildProbe label="nested" expanded={50} collapsed={20} />
+        </Secondary>
+      </Secondary>,
+    )
+
+    const outerObserver = FakeResizeObserver.instances[0]
+    act(() => {
+      outerObserver.trigger({ width: 300, height: 40 })
+    })
+    expect(screen.getByTestId('a')).toHaveTextContent('false')
+
+    const handle = screen.getByRole('separator')
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 150,
+    } as DOMRect)
+    fireEvent.pointerDown(handle, { clientX: 0, pointerId: 1 })
+    // Shrink well below nested's own required width (~77, given its child
+    // plus its own gap/padding/handle at layer 1).
+    fireEvent.pointerMove(handle, { clientX: -140, pointerId: 1 })
+    fireEvent.pointerUp(handle, { pointerId: 1 })
+
+    expect(screen.getByTestId('nested')).toHaveTextContent('true')
+    // Only the nested Secondary's own primary collapsed — the ancestor's
+    // sibling primary is unaffected.
+    expect(screen.getByTestId('a')).toHaveTextContent('false')
+  })
+
+  it('still cascades ancestor collapse into a nested Secondary even if its own drag says it has enough room', () => {
+    render(
+      <Secondary>
+        <ChildProbe label="a" expanded={50} collapsed={20} />
+        <Secondary resizable>
+          <ChildProbe label="nested" expanded={30} collapsed={10} />
+        </Secondary>
+      </Secondary>,
+    )
+
+    const handle = screen.getByRole('separator')
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 60,
+    } as DOMRect)
+    fireEvent.pointerDown(handle, { clientX: 0, pointerId: 1 })
+    fireEvent.pointerMove(handle, { clientX: 500, pointerId: 1 })
+    fireEvent.pointerUp(handle, { pointerId: 1 })
+
+    const outerObserver = FakeResizeObserver.instances[0]
+    act(() => {
+      outerObserver.trigger({ width: 40, height: 40 })
+    })
+
+    expect(screen.getByTestId('a')).toHaveTextContent('true')
+    expect(screen.getByTestId('nested')).toHaveTextContent('true')
   })
 
   it('renders a handle on a resizable root Secondary', () => {

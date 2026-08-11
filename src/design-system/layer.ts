@@ -32,3 +32,17 @@ export function useSecondaryDirection(): 'row' | 'column' {
 }
 
 export const DirectionProvider = DirectionContext.Provider
+
+const ResizableContext = createContext(false)
+
+// Whether the nearest enclosing Secondary grants its Primary children
+// permission to be user-resizable — a capability grant broadcast downward
+// the same way layer/direction/collapsed are, rather than the app having
+// to set a resizable prop on every Primary individually. A Primary still
+// owns its own size locally (via useOwnedSize) once granted; this only
+// controls whether that's allowed.
+export function useResizable(): boolean {
+  return useContext(ResizableContext)
+}
+
+export const ResizableProvider = ResizableContext.Provider
