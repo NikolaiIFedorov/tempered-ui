@@ -151,19 +151,13 @@ function AppContent() {
           pointerEvents: 'none',
         }}
       >
-        <Secondary
-          direction="column"
-          style={{ gridArea: 'files', height: '100%', borderRadius: 0 }}
-        >
+        <Secondary direction="column" style={{ gridArea: 'files', height: '100%' }}>
           <Button icon={<NewIcon />} label="New" onClick={() => console.log('new')} />
           <Button icon={<OpenIcon />} label="Open" onClick={() => console.log('open')} />
           <Button icon={<SaveIcon />} label="Save" onClick={() => console.log('save')} />
         </Secondary>
 
-        <Secondary
-          direction="column"
-          style={{ gridArea: 'tools', height: '100%', borderRadius: 0 }}
-        >
+        <Secondary direction="column" style={{ gridArea: 'tools', height: '100%' }}>
           {TOOLS.map((tool) => (
             <Button
               key={tool.key}
@@ -174,7 +168,7 @@ function AppContent() {
           ))}
         </Secondary>
 
-        <Secondary style={{ gridArea: 'misc', borderRadius: 0 }}>
+        <Secondary style={{ gridArea: 'misc' }}>
           <Button
             icon={<AnalysisIcon />}
             label="Analysis"
