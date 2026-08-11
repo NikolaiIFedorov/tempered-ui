@@ -120,26 +120,48 @@ function AppContent() {
 
   return (
     <div
-      style={{
-        height: '100vh',
-        width: '100vw',
-        display: 'grid',
-        gridTemplateColumns: 'auto auto 1fr',
-        gridTemplateRows: 'auto 1fr',
-        gridTemplateAreas: `"files tools misc" "files tools canvas"`,
-        fontFamily: 'sans-serif',
-      }}
+      style={{ position: 'relative', height: '100vh', width: '100vw', fontFamily: 'sans-serif' }}
     >
-      <div style={{ gridArea: 'files' }}>
-        <Secondary direction="column" style={{ height: '100%', borderRadius: 0 }}>
+      {/* The eventual WASM viewport — full-bleed behind everything, not
+          confined to a sub-rectangle the chrome carves out. */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundColor: toCssColor(theme.resolveCanvas()),
+        }}
+      />
+
+      {/* UI chrome floats over the canvas via this same grid as before,
+          just as a transparent overlay instead of something that reserves
+          canvas space. pointerEvents: none here lets clicks in empty grid
+          cells (most of "canvas") fall through to the viewport underneath
+          — each Secondary's own visible row re-enables it automatically,
+          its invisible measurement shell (where one exists) never does. */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'grid',
+          gridTemplateColumns: 'auto auto 1fr',
+          gridTemplateRows: 'auto 1fr',
+          gridTemplateAreas: `"files tools misc" "files tools canvas"`,
+          pointerEvents: 'none',
+        }}
+      >
+        <Secondary
+          direction="column"
+          style={{ gridArea: 'files', height: '100%', borderRadius: 0 }}
+        >
           <Button icon={<NewIcon />} label="New" onClick={() => console.log('new')} />
           <Button icon={<OpenIcon />} label="Open" onClick={() => console.log('open')} />
           <Button icon={<SaveIcon />} label="Save" onClick={() => console.log('save')} />
         </Secondary>
-      </div>
 
-      <div style={{ gridArea: 'tools' }}>
-        <Secondary direction="column" style={{ height: '100%', borderRadius: 0 }}>
+        <Secondary
+          direction="column"
+          style={{ gridArea: 'tools', height: '100%', borderRadius: 0 }}
+        >
           {TOOLS.map((tool) => (
             <Button
               key={tool.key}
@@ -149,10 +171,8 @@ function AppContent() {
             />
           ))}
         </Secondary>
-      </div>
 
-      <div style={{ gridArea: 'misc' }}>
-        <Secondary style={{ borderRadius: 0 }}>
+        <Secondary style={{ gridArea: 'misc', borderRadius: 0 }}>
           <Button
             icon={<AnalysisIcon />}
             label="Analysis"
@@ -160,26 +180,18 @@ function AppContent() {
           />
           <Button icon={<XRayIcon />} label="X-Ray" onClick={() => console.log('x-ray')} />
         </Secondary>
-      </div>
 
-      <div
-        style={{
-          gridArea: 'canvas',
-          position: 'relative',
-          backgroundColor: toCssColor(theme.resolveCanvas()),
-        }}
-      >
         {activeTool ? (
-          // Default position only — top-left of the canvas area, just below
-          // the misc bar. Free repositioning is deferred: onReorder only
-          // swaps items within one Secondary's own list, it doesn't do free
-          // 2D placement, and desktop position doesn't actually matter here
+          // Default position only, achieved for free by sitting in the same
+          // grid cell as the (otherwise empty) canvas area — top-left of
+          // it, just below the misc bar (the margin nudges it in from the
+          // edges). Free repositioning is deferred: onReorder only swaps
+          // items within one Secondary's own list, it doesn't do free 2D
+          // placement, and desktop position doesn't actually matter here
           // (touch enforces top-left as the reachable corner regardless).
-          <div style={{ position: 'absolute', top: 12, left: 12 }}>
-            <Secondary>
-              <Button icon={activeTool.icon} label={activeTool.label} />
-            </Secondary>
-          </div>
+          <Secondary style={{ gridArea: 'canvas', margin: 12 }}>
+            <Button icon={activeTool.icon} label={activeTool.label} />
+          </Secondary>
         ) : null}
       </div>
     </div>

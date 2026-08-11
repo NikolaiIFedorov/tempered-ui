@@ -182,6 +182,21 @@ ever registered per Primary (its expanded size along that axis) — there's
 no separate collapsed size to track, since the collapse threshold is only
 ever compared against the expanded requirement in the first place.
 
+A self-measuring root's split into an outer measurement wrapper and an
+inner, visually-styled row is an implementation detail a caller should
+never need to know about: `className`/`style` are applied to whichever of
+the two is genuinely outermost (the wrapper, for a self-measuring root;
+the row directly, otherwise), so `<Secondary>` can be positioned or
+spaced as one atomic unit — `style={{ gridArea: 'x' }}`, margin, absolute
+positioning — without a caller ever needing its own wrapper `<div>` just
+to carry layout props Secondary should have taken itself. The wrapper
+also never intercepts pointer events on its own — only the visible row
+does — since the wrapper's true available-space width is often much
+larger than what's actually rendered inside it (e.g. a small floating
+panel measured against a full canvas behind it); pointer-events: none
+lets clicks pass through the wrapper's empty space to whatever's behind
+it rather than being silently swallowed by an invisible box.
+
 ## Reposition
 
 An `onReorder` Secondary makes its direct children draggable to reorder

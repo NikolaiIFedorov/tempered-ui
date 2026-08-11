@@ -98,6 +98,71 @@ describe('Secondary collapse', () => {
   })
 })
 
+describe('className/style targeting', () => {
+  // A row-direction root additionally renders an outer, invisible
+  // measurement wrapper around the visually-styled row — className/style
+  // must reach whichever element is genuinely outermost, so a caller can
+  // treat <Secondary> as one atomic unit (position it, add margin) without
+  // knowing that split exists.
+  it('applies className/style to the outer measurement wrapper on a row-direction root', () => {
+    const { container } = render(
+      <Secondary className="my-class" style={{ marginTop: 12 }}>
+        <ChildProbe label="a" expanded={50} />
+      </Secondary>,
+    )
+
+    const outer = container.firstChild as HTMLElement
+    expect(outer.className).toBe('my-class')
+    expect(outer).toHaveStyle({ marginTop: '12px' })
+    // The required measurement styles must still be present, not clobbered.
+    expect(outer).toHaveStyle({ width: '100%', maxWidth: '100%' })
+  })
+
+  // The measurement wrapper has no visible content of its own — its true
+  // available-space width is often much larger than the visible row inside
+  // it (e.g. a small floating panel measured against a full canvas), so it
+  // must never intercept pointer events itself, or it'd swallow clicks
+  // across space nothing is actually rendered in.
+  it('never lets the invisible measurement wrapper intercept pointer events, only the visible row', () => {
+    const { container } = render(
+      <Secondary>
+        <ChildProbe label="a" expanded={50} />
+      </Secondary>,
+    )
+
+    const wrapper = container.firstChild as HTMLElement
+    const row = wrapper.firstChild as HTMLElement
+    expect(wrapper).toHaveStyle({ pointerEvents: 'none' })
+    expect(row).toHaveStyle({ pointerEvents: 'auto' })
+  })
+
+  it('applies className/style directly to the row for a column-direction (non-self-measuring) Secondary', () => {
+    const { container } = render(
+      <Secondary direction="column" className="my-class" style={{ marginTop: 12 }}>
+        <ChildProbe label="a" expanded={50} />
+      </Secondary>,
+    )
+
+    const outer = container.firstChild as HTMLElement
+    expect(outer.className).toBe('my-class')
+    expect(outer).toHaveStyle({ marginTop: '12px', display: 'flex' })
+  })
+
+  it('applies className/style directly to the row for a nested (non-self-measuring) Secondary', () => {
+    const { container } = render(
+      <Secondary>
+        <Secondary className="my-class" style={{ marginTop: 12 }}>
+          <ChildProbe label="a" expanded={50} />
+        </Secondary>
+      </Secondary>,
+    )
+
+    const nestedRow = (container.firstChild as HTMLElement).querySelector('.my-class')
+    expect(nestedRow).not.toBeNull()
+    expect(nestedRow).toHaveStyle({ marginTop: '12px', display: 'flex' })
+  })
+})
+
 describe('column-direction root Secondary', () => {
   it('never self-measures — a block element has no genuine external height constraint in ordinary flow', () => {
     render(

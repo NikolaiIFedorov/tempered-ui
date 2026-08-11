@@ -232,9 +232,15 @@ export function Secondary({
   })
   const renderOrder = dragOrder ?? naturalOrder
 
+  // A self-measuring root additionally renders an outer measurement
+  // wrapper (below) — className/style belong on whichever element is
+  // genuinely outermost, so a caller can position/style a <Secondary>
+  // as one atomic unit without needing to know that split exists. For a
+  // self-measuring root they're applied to the wrapper instead (merged
+  // with its own required width/maxWidth), not duplicated here.
   const flexRow = (
     <div
-      className={className}
+      className={selfMeasures ? undefined : className}
       style={{
         display: 'flex',
         flexDirection: direction,
@@ -256,7 +262,11 @@ export function Secondary({
         color: toCssColor(ink),
         overflowX: direction === 'row' ? 'auto' : 'hidden',
         overflowY: direction === 'row' ? 'hidden' : 'auto',
-        ...style,
+        // This is the visible, styled box — it's always the real
+        // interactive surface even when a self-measuring root wraps it in
+        // an outer shell that's purely for measurement (see below).
+        pointerEvents: 'auto',
+        ...(selfMeasures ? null : style),
       }}
     >
       {renderOrder.map((key) => (
@@ -294,7 +304,20 @@ export function Secondary({
               // collapse decision back as "not enough room" and get stuck.
               // This invisible width: 100% wrapper is what's measured; the
               // fit-content, visually-styled row lives inside it, unmeasured.
-              <div ref={measureRef} style={{ width: '100%', maxWidth: '100%' }}>
+              // It has no visible content of its own (which is often much
+              // narrower than the true available space it measures), so it
+              // never intercepts pointer events itself — only the visible
+              // row above does — otherwise it'd swallow clicks across
+              // space nothing is actually rendered in, e.g. when floated
+              // over a canvas meant to stay click-through in the gaps.
+              // The caller's own style is spread after the required width/
+              // maxWidth/pointerEvents so it can extend (e.g. position it,
+              // add margin) without needing to know this wrapper exists.
+              <div
+                ref={measureRef}
+                className={className}
+                style={{ width: '100%', maxWidth: '100%', pointerEvents: 'none', ...style }}
+              >
                 {flexRow}
               </div>
             ) : (
