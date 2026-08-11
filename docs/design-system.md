@@ -8,8 +8,10 @@ where the component type has a meaningful icon; icon-less types (paragraph,
 plain label) omit it rather than forcing a placeholder. **Secondary**
 components are containers: they arrange a list of Primary components, or nest
 another Secondary component. Secondary components are the only unit that can
-be hidden, relocated, or resized by the user (panels, toolbars, docked
-groups).
+be hidden or reordered by the user (panels, toolbars, docked groups). Resizing
+isn't exclusively a Secondary capability — see Resize below — but every
+component that supports it (Secondary itself, Input's field) owns its size the
+same uniform way.
 
 ## Layer
 
@@ -173,23 +175,65 @@ needs the analytical icon/ellipsis-based formula.
 
 ## Resize
 
-A `resizable` Secondary (opt-in, only meaningful on the same population
-that self-measures — root, `direction="row"`) gets a drag handle on its
-trailing edge. Dragging doesn't introduce separate collapse logic: it
-sets an explicit width on the measurement wrapper in place of its usual
-`100%`, which flows through the identical `ResizeObserver`/threshold path
-a real viewport resize already uses — collapse-on-drag falls out of code
-that already exists rather than needing its own.
+Size is owned locally by whichever component has it, the same
+broadcast-and-locally-own pattern `layer`/`direction`/`collapsed` already
+use — not something a parent computes or holds the pixel value for on a
+child's behalf. `useOwnedSize(defaultSize, { axis, min, enabled })` is the
+one primitive behind every resizable dimension: it holds an optional
+local override (`null` until the user drags), exposes `size` (`override ??
+defaultSize`), and returns ready-to-spread pointer handlers for a drag
+handle. Any component that wants to be user-resizable uses this the same
+way, rather than growing its own bespoke drag state.
 
-The drag has a floor (`requiredCollapsed` — can't shrink below the point
-where even fully-collapsed content fits) but no explicit JS-level
-ceiling. The wrapper's own `maxWidth: 100%` is the real ceiling (true
-available space); capping the drag at exactly `requiredExpanded` in code
-was tried and reverted — it's a knife's-edge value where the JS-computed
-clamp and what the browser reports back through `ResizeObserver` after
-actual layout (with its own subpixel rounding) don't perfectly agree, so
-a drag aimed at "fully expanded" would land just under the threshold and
-stay collapsed no matter how far out it was dragged.
+`resizable` on a Secondary does two things: it grants *itself* a drag
+handle, and it broadcasts that same permission downward via
+`ResizableContext`/`useResizable()` so its Primary children can render
+their own handles without the app having to set a `resizable` prop on
+each one individually. Not every Primary consumes it — a Button's size is
+purely a function of its content (icon + label), with nothing independent
+to negotiate beyond collapse, which already exists — but Input's field
+does, since a wider or narrower text box is a real, common affordance.
+
+**Root Secondary (`layer 0`, `direction="row"`).** Its `useOwnedSize` ref
+attaches to the same measurement wrapper `ResizeObserver` already watches,
+so a drag flows through the identical threshold path a real viewport
+resize uses — collapse-on-drag falls out of code that already exists
+rather than needing its own. The drag has a floor (`requiredCollapsed` —
+can't shrink below the point where even fully-collapsed content fits) but
+no explicit JS-level ceiling: the wrapper's own `maxWidth: 100%` is the
+real ceiling (true available space). Capping the drag at exactly
+`requiredExpanded` in code was tried and reverted — it's a knife's-edge
+value where the JS-computed clamp and what the browser reports back
+through `ResizeObserver` after actual layout (with its own subpixel
+rounding) don't perfectly agree, so a drag aimed at "fully expanded"
+would land just under the threshold and stay collapsed no matter how far
+out it was dragged.
+
+**Nested Secondary.** It never self-measures (see Collapse), so its
+`useOwnedSize` ref attaches directly to its own flex row instead of a
+separate measurement wrapper, and its collapse decision is computed
+directly rather than through a `ResizeObserver`: `size < requiredExpanded`
+once it's been dragged, `false` otherwise. That's combined with the
+inherited ancestor cascade via OR — a nested Secondary can collapse
+because *it* was dragged narrow, or because its ancestor was, whichever
+comes first. This OR is safe here in a way it isn't for self-measurement:
+the size came from direct pointer input, not from a box measuring its own
+rendered size, so there's no self-referential trap.
+
+**Input's field.** Independent resize, unrelated to the label-prefix's
+collapse — the field's width is `useOwnedSize` gated by `useResizable()`,
+floored at the field's own `minSize`. Its handle's width counts toward
+Input's registered footprint on the row axis only; the field never enters
+a column-direction Secondary's height footprint, since Input's internal
+layout (prefix beside field) is always row regardless of its enclosing
+Secondary's direction.
+
+A resize handle nested inside an ancestor's own drag surface — e.g. a
+resizable nested Secondary's handle sitting inside the root's reorderable
+item wrapper — needs `event.stopPropagation()` in `useOwnedSize`'s pointer
+handlers; without it, the pointerdown bubbles up and the ancestor's own
+handler (reorder, in that example) steals pointer capture for itself,
+silently breaking the nested drag.
 
 ## Reposition
 
