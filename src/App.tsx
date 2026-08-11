@@ -153,17 +153,25 @@ function AppContent() {
           inset: 0,
           display: 'grid',
           gridTemplateColumns: 'auto auto 1fr',
-          gridTemplateRows: 'auto 1fr',
-          gridTemplateAreas: `"files tools misc" "files tools canvas"`,
+          gridTemplateRows: 'auto auto 1fr',
+          gridTemplateAreas: `"files files files" "settings tools misc" "settings tools canvas"`,
           gap: 12,
           padding: 12,
           pointerEvents: 'none',
         }}
       >
-        <Secondary direction="column" style={{ gridArea: 'files', height: '100%' }}>
+        <Secondary style={{ gridArea: 'files' }}>
           <Button icon={<NewIcon />} label="New" onClick={() => console.log('new')} />
           <Button icon={<OpenIcon />} label="Open" onClick={() => console.log('open')} />
           <Button icon={<SaveIcon />} label="Save" onClick={() => console.log('save')} />
+        </Secondary>
+
+        <Secondary direction="column" style={{ gridArea: 'settings', height: '100%' }}>
+          <Button
+            icon={<SettingsIcon />}
+            label="Settings"
+            onClick={() => console.log('settings')}
+          />
         </Secondary>
 
         <Secondary direction="column" style={{ gridArea: 'tools', height: '100%' }}>
@@ -184,11 +192,6 @@ function AppContent() {
             onClick={() => console.log('analysis')}
           />
           <Button icon={<XRayIcon />} label="X-Ray" onClick={() => console.log('x-ray')} />
-          <Button
-            icon={<SettingsIcon />}
-            label="Settings"
-            onClick={() => console.log('settings')}
-          />
         </Secondary>
 
         {activeTool ? (
