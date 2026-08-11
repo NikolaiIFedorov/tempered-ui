@@ -100,9 +100,22 @@ const extrudeAction: Action = {
 // once React actually renders that Secondary — a plain function called
 // during the parent's render can't reach it, since the Provider it needs
 // doesn't exist yet at that point.
+//
+// Hiding must be visual only (display: none), never a conditional unmount
+// — every registered min-size footprint is supposed to be a fixed
+// {expanded, collapsed} pair, unconditionally true regardless of current
+// render state (that's the whole point: it's what the ancestor's collapse
+// *decision* is based on). Unmounting the Input on collapse un-registers
+// it, shrinking this Secondary's own reported footprint, which can shrink
+// the root's required width enough to un-collapse it — which re-expands
+// this Secondary, remounting the Input, growing the footprint back,
+// re-collapsing the root — an infinite loop. display: contents keeps the
+// Input mounted (stable registration, real layout for its own
+// measurement) while still letting its children act as direct flex items
+// of the surrounding row.
 function CollapsibleParams({ children }: { children: ReactNode }) {
   const collapsed = useCollapsed()
-  return collapsed ? null : <>{children}</>
+  return <span style={{ display: collapsed ? 'none' : 'contents' }}>{children}</span>
 }
 
 // A parameterized action renders as a resizable Secondary containing the

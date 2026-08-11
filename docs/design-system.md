@@ -15,19 +15,31 @@ independently.
 
 A Primary that takes parameters (an Extrude button with a depth) isn't a
 third component kind — it's a resizable nested Secondary containing the
-button plus one Input per parameter, with the params conditionally
-rendered only while that Secondary is expanded (Input's own collapsed
-form still keeps its field visible, which is right for a value the user
-set on purpose but wrong for a parameter meant to stay hidden until
-revealed). Nesting the params inside the button's own box, rather than
-placing them beside it as a sibling, is what makes expanding read as
-"this button's own detail" instead of an unrelated adjacent control, and
-gives each parameterized action its own independent expand state even
-when several sit in the same toolbar. This is ordinary composition of
-existing primitives, not a new mechanism — a parameter schema declared
-next to a callback (not reflection over the callback itself, which can't
-recover a type, range, or label to generate a real control from) is
-enough to build it entirely in application code.
+button plus one Input per parameter, with the params visually hidden
+until that Secondary is expanded (Input's own collapsed form still keeps
+its field visible, which is right for a value the user set on purpose but
+wrong for a parameter meant to stay hidden until revealed). Nesting the
+params inside the button's own box, rather than placing them beside it as
+a sibling, is what makes expanding read as "this button's own detail"
+instead of an unrelated adjacent control, and gives each parameterized
+action its own independent expand state even when several sit in the same
+toolbar. This is ordinary composition of existing primitives, not a new
+mechanism — a parameter schema declared next to a callback (not
+reflection over the callback itself, which can't recover a type, range,
+or label to generate a real control from) is enough to build it entirely
+in application code.
+
+Hiding the params must be purely visual (`display: none`), never a
+conditional unmount — every registered min-size footprint is meant to be
+a fixed `{expanded, collapsed}` pair, true regardless of current render
+state, since that pair is what an ancestor's own collapse *decision*
+reads. Unmounting a param's Input on collapse un-registers it, shrinking
+this Secondary's own reported footprint — which can shrink the root's
+required width enough to un-collapse it, which re-expands this Secondary,
+remounting the Input, growing the footprint back, re-collapsing the
+root — a real infinite render loop, not a hypothetical one. Keeping the
+Input mounted (via `display: contents` on a wrapper when visible) keeps
+its registration stable while still hiding it.
 
 ## Layer
 
