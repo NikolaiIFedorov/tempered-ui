@@ -68,7 +68,7 @@ describe('useOwnedSize', () => {
 
     const handle = screen.getByTestId('handle')
     fireEvent.pointerDown(handle, { clientX: 0, pointerId: 1 })
-    fireEvent.pointerMove(handle, { clientX: 40, pointerId: 1 })
+    fireEvent.pointerMove(handle, { clientX: 40, pointerId: 1, buttons: 1 })
 
     expect(screen.getByTestId('size')).toHaveTextContent('140')
     expect(screen.getByTestId('overridden')).toHaveTextContent('true')
@@ -82,7 +82,7 @@ describe('useOwnedSize', () => {
 
     const handle = screen.getByTestId('handle')
     fireEvent.pointerDown(handle, { clientY: 0, pointerId: 1 })
-    fireEvent.pointerMove(handle, { clientY: -30, pointerId: 1 })
+    fireEvent.pointerMove(handle, { clientY: -30, pointerId: 1, buttons: 1 })
 
     expect(screen.getByTestId('size')).toHaveTextContent('70')
   })
@@ -95,7 +95,7 @@ describe('useOwnedSize', () => {
 
     const handle = screen.getByTestId('handle')
     fireEvent.pointerDown(handle, { clientX: 0, pointerId: 1 })
-    fireEvent.pointerMove(handle, { clientX: -100000, pointerId: 1 })
+    fireEvent.pointerMove(handle, { clientX: -100000, pointerId: 1, buttons: 1 })
 
     expect(screen.getByTestId('size')).toHaveTextContent('20')
   })
@@ -108,7 +108,7 @@ describe('useOwnedSize', () => {
 
     const handle = screen.getByTestId('handle')
     fireEvent.pointerDown(handle, { clientX: 0, pointerId: 1 })
-    fireEvent.pointerMove(handle, { clientX: -50, pointerId: 1 })
+    fireEvent.pointerMove(handle, { clientX: -50, pointerId: 1, buttons: 1 })
     expect(screen.getByTestId('size')).toHaveTextContent('50')
 
     fireEvent.click(screen.getByText('raise floor'))
@@ -121,6 +121,29 @@ describe('useOwnedSize', () => {
     fireEvent.pointerMove(handle, { clientX: 500, pointerId: 1 })
     expect(screen.getByTestId('size')).toHaveTextContent('100')
     expect(screen.getByTestId('overridden')).toHaveTextContent('false')
+  })
+
+  it('stops the drag as soon as a move reveals the button was already released, even with no matching pointerup', () => {
+    // A real pointerup can go missing (window blur, a native drag
+    // interrupting capture, etc.) — without this, the drag gets stuck: the
+    // next pointermove (even a plain hover) would keep resizing.
+    render(<Probe defaultSize={100} min={0} enabled />)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 100,
+    } as DOMRect)
+
+    const handle = screen.getByTestId('handle')
+    fireEvent.pointerDown(handle, { clientX: 0, pointerId: 1, buttons: 1 })
+    fireEvent.pointerMove(handle, { clientX: 40, pointerId: 1, buttons: 1 })
+    expect(screen.getByTestId('size')).toHaveTextContent('140')
+
+    // No pointerup fired — just a stray move with no button held.
+    fireEvent.pointerMove(handle, { clientX: 90, pointerId: 1, buttons: 0 })
+    expect(screen.getByTestId('size')).toHaveTextContent('140')
+
+    // Further hover-only movement must not keep resizing.
+    fireEvent.pointerMove(handle, { clientX: 500, pointerId: 1, buttons: 0 })
+    expect(screen.getByTestId('size')).toHaveTextContent('140')
   })
 
   it("stops pointer events from bubbling to an ancestor's own drag handler", () => {
@@ -150,7 +173,7 @@ describe('useOwnedSize', () => {
 
     const handle = screen.getByTestId('handle')
     fireEvent.pointerDown(handle, { clientX: 0, pointerId: 1 })
-    fireEvent.pointerMove(handle, { clientX: 40, pointerId: 1 })
+    fireEvent.pointerMove(handle, { clientX: 40, pointerId: 1, buttons: 1 })
 
     expect(ancestorPointerDown).not.toHaveBeenCalled()
     expect(ancestorPointerMove).not.toHaveBeenCalled()

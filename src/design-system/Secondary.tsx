@@ -177,10 +177,38 @@ export function Secondary({
     [onReorder],
   )
 
+  // Shared cleanup for every way a drag can end: a normal release, a
+  // browser-cancelled gesture, or a stray move that reveals the button was
+  // already let go (see handleItemPointerMove below). `commit` controls
+  // whether the live preview order becomes real via onReorder, or is
+  // discarded back to the caller's actual order.
+  const endReorderDrag = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>, commit: boolean) => {
+      const state = reorderStateRef.current
+      reorderStateRef.current = null
+      setDragOrder(null)
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
+      if (commit && state) onReorder?.(state.order)
+    },
+    [onReorder],
+  )
+
   const handleItemPointerMove = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       const state = reorderStateRef.current
       if (!state) return
+      // event.buttons is the live truth of whether a button is still held —
+      // relying solely on receiving a matching pointerup/pointercancel is
+      // fragile (window blur, a native drag interrupting capture, etc. can
+      // all cause it to go missing). Without this check, a missed release
+      // leaves the drag permanently "stuck": the item stays visually
+      // dimmed and any later hover keeps reordering it.
+      if (event.buttons === 0) {
+        endReorderDrag(event, true)
+        return
+      }
       const pointerPos = direction === 'row' ? event.clientX : event.clientY
       const order = [...state.order]
       const draggedIndex = order.indexOf(state.key)
@@ -204,20 +232,17 @@ export function Secondary({
         setDragOrder(order)
       }
     },
-    [direction],
+    [direction, endReorderDrag],
   )
 
   const handleItemPointerUp = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      const state = reorderStateRef.current
-      reorderStateRef.current = null
-      setDragOrder(null)
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId)
-      }
-      if (state) onReorder?.(state.order)
-    },
-    [onReorder],
+    (event: ReactPointerEvent<HTMLDivElement>) => endReorderDrag(event, true),
+    [endReorderDrag],
+  )
+
+  const handleItemPointerCancel = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => endReorderDrag(event, false),
+    [endReorderDrag],
   )
 
   if (hidden) return null
@@ -275,6 +300,7 @@ export function Secondary({
           onPointerDown={onReorder ? handleItemPointerDown(key, naturalOrder) : undefined}
           onPointerMove={onReorder ? handleItemPointerMove : undefined}
           onPointerUp={onReorder ? handleItemPointerUp : undefined}
+          onPointerCancel={onReorder ? handleItemPointerCancel : undefined}
           style={{
             flexShrink: 0,
             cursor: onReorder ? 'grab' : undefined,

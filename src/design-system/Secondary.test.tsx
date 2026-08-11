@@ -282,8 +282,8 @@ describe('drag-to-resize', () => {
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       width: startWidth,
     } as DOMRect)
-    fireEvent.pointerDown(handle, { clientX: 0, pointerId: 1 })
-    fireEvent.pointerMove(handle, { clientX: deltaX, pointerId: 1 })
+    fireEvent.pointerDown(handle, { clientX: 0, pointerId: 1, buttons: 1 })
+    fireEvent.pointerMove(handle, { clientX: deltaX, pointerId: 1, buttons: 1 })
 
     const appliedWidth = parseFloat((container.firstChild as HTMLElement).style.width)
     const observer = FakeResizeObserver.instances[0]
@@ -335,10 +335,10 @@ describe('drag-to-resize', () => {
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       width: 150,
     } as DOMRect)
-    fireEvent.pointerDown(handle, { clientX: 0, pointerId: 1 })
+    fireEvent.pointerDown(handle, { clientX: 0, pointerId: 1, buttons: 1 })
     // Shrink well below nested's own required width (~77, given its child
     // plus its own gap/padding/handle at layer 1).
-    fireEvent.pointerMove(handle, { clientX: -140, pointerId: 1 })
+    fireEvent.pointerMove(handle, { clientX: -140, pointerId: 1, buttons: 1 })
     fireEvent.pointerUp(handle, { pointerId: 1 })
 
     expect(screen.getByTestId('nested')).toHaveTextContent('true')
@@ -361,8 +361,8 @@ describe('drag-to-resize', () => {
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       width: 60,
     } as DOMRect)
-    fireEvent.pointerDown(handle, { clientX: 0, pointerId: 1 })
-    fireEvent.pointerMove(handle, { clientX: 500, pointerId: 1 })
+    fireEvent.pointerDown(handle, { clientX: 0, pointerId: 1, buttons: 1 })
+    fireEvent.pointerMove(handle, { clientX: 500, pointerId: 1, buttons: 1 })
     fireEvent.pointerUp(handle, { pointerId: 1 })
 
     const outerObserver = FakeResizeObserver.instances[0]
@@ -471,8 +471,8 @@ describe('drag-to-reorder', () => {
     )
     const a = itemWrapper(container, 'a')
     expect(a.style.cursor).toBe('')
-    fireEvent.pointerDown(a, { clientX: 50, pointerId: 1 })
-    fireEvent.pointerMove(a, { clientX: 160, pointerId: 1 })
+    fireEvent.pointerDown(a, { clientX: 50, pointerId: 1, buttons: 1 })
+    fireEvent.pointerMove(a, { clientX: 160, pointerId: 1, buttons: 1 })
     fireEvent.pointerUp(a, { pointerId: 1 })
     // Nothing should have moved — order in the DOM stays natural.
     expect(screen.getAllByTestId(/[abc]/).map((el) => el.dataset.testid)).toEqual(['a', 'b'])
@@ -489,9 +489,9 @@ describe('drag-to-reorder', () => {
     )
 
     const a = itemWrapper(container, 'a')
-    fireEvent.pointerDown(a, { clientX: 50, pointerId: 1 })
+    fireEvent.pointerDown(a, { clientX: 50, pointerId: 1, buttons: 1 })
     // b's midpoint is at x=150; 160 is past it.
-    fireEvent.pointerMove(a, { clientX: 160, pointerId: 1 })
+    fireEvent.pointerMove(a, { clientX: 160, pointerId: 1, buttons: 1 })
     fireEvent.pointerUp(a, { pointerId: 1 })
 
     expect(onReorder).toHaveBeenCalledWith(['b', 'a', 'c'])
@@ -507,8 +507,8 @@ describe('drag-to-reorder', () => {
     )
 
     const a = itemWrapper(container, 'a')
-    fireEvent.pointerDown(a, { clientX: 50, pointerId: 1 })
-    fireEvent.pointerMove(a, { clientX: 160, pointerId: 1 })
+    fireEvent.pointerDown(a, { clientX: 50, pointerId: 1, buttons: 1 })
+    fireEvent.pointerMove(a, { clientX: 160, pointerId: 1, buttons: 1 })
 
     const order = screen.getAllByTestId(/[abc]/).map((el) => el.dataset.testid)
     expect(order).toEqual(['b', 'a', 'c'])
@@ -524,10 +524,64 @@ describe('drag-to-reorder', () => {
     )
 
     const a = itemWrapper(container, 'a')
-    fireEvent.pointerDown(a, { clientX: 50, pointerId: 1 })
-    fireEvent.pointerMove(a, { clientX: 55, pointerId: 1 })
+    fireEvent.pointerDown(a, { clientX: 50, pointerId: 1, buttons: 1 })
+    fireEvent.pointerMove(a, { clientX: 55, pointerId: 1, buttons: 1 })
     fireEvent.pointerUp(a, { pointerId: 1 })
 
     expect(onReorder).toHaveBeenCalledWith(['a', 'b'])
+  })
+
+  it('stops the drag as soon as a move reveals the button was already released, even with no matching pointerup', () => {
+    // Mirrors the real-world failure: a pointerup can go missing (window
+    // blur, a native drag interrupting capture, etc.). Without this check,
+    // the item stays visually dimmed and any later hover would keep
+    // reordering it, since reorderStateRef never got cleared.
+    const onReorder = vi.fn()
+    const { container } = render(
+      <Secondary onReorder={onReorder}>
+        <ChildProbe key="a" label="a" expanded={10} collapsed={5} />
+        <ChildProbe key="b" label="b" expanded={10} collapsed={5} />
+        <ChildProbe key="c" label="c" expanded={10} collapsed={5} />
+      </Secondary>,
+    )
+
+    const a = itemWrapper(container, 'a')
+    fireEvent.pointerDown(a, { clientX: 50, pointerId: 1, buttons: 1 })
+    fireEvent.pointerMove(a, { clientX: 160, pointerId: 1, buttons: 1 })
+    expect(a.style.opacity).toBe('0.5')
+
+    // No pointerup fired — just a stray move with no button held, as if
+    // the release happened somewhere pointer capture didn't route it.
+    fireEvent.pointerMove(a, { clientX: 160, pointerId: 1, buttons: 0 })
+    expect(onReorder).toHaveBeenCalledWith(['b', 'a', 'c'])
+    expect(a.style.opacity).toBe('1')
+
+    // Further hover-only movement must not reorder anything else.
+    onReorder.mockClear()
+    const b = itemWrapper(container, 'b')
+    fireEvent.pointerMove(b, { clientX: 250, pointerId: 1, buttons: 0 })
+    expect(onReorder).not.toHaveBeenCalled()
+  })
+
+  it('reverts to the natural order on pointercancel, without committing the preview', () => {
+    const onReorder = vi.fn()
+    const { container } = render(
+      <Secondary onReorder={onReorder}>
+        <ChildProbe key="a" label="a" expanded={10} collapsed={5} />
+        <ChildProbe key="b" label="b" expanded={10} collapsed={5} />
+        <ChildProbe key="c" label="c" expanded={10} collapsed={5} />
+      </Secondary>,
+    )
+
+    const a = itemWrapper(container, 'a')
+    fireEvent.pointerDown(a, { clientX: 50, pointerId: 1, buttons: 1 })
+    fireEvent.pointerMove(a, { clientX: 160, pointerId: 1, buttons: 1 })
+    expect(screen.getAllByTestId(/[abc]/).map((el) => el.dataset.testid)).toEqual(['b', 'a', 'c'])
+
+    fireEvent.pointerCancel(a, { pointerId: 1 })
+
+    expect(onReorder).not.toHaveBeenCalled()
+    expect(a.style.opacity).toBe('1')
+    expect(screen.getAllByTestId(/[abc]/).map((el) => el.dataset.testid)).toEqual(['a', 'b', 'c'])
   })
 })

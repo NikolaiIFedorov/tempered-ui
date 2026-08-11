@@ -21,6 +21,7 @@ export interface OwnedSize<T extends HTMLElement> {
     onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void
     onPointerMove: (event: ReactPointerEvent<HTMLElement>) => void
     onPointerUp: (event: ReactPointerEvent<HTMLElement>) => void
+    onPointerCancel: (event: ReactPointerEvent<HTMLElement>) => void
   } | null
 }
 
@@ -63,24 +64,34 @@ export function useOwnedSize<T extends HTMLElement>(
     [enabled, axis],
   )
 
-  const handlePointerMove = useCallback(
-    (event: ReactPointerEvent<HTMLElement>) => {
-      if (!dragStateRef.current) return
-      event.stopPropagation()
-      const pos = axis === 'x' ? event.clientX : event.clientY
-      const raw = dragStateRef.current.startSize + (pos - dragStateRef.current.startPos)
-      setOverride(Math.max(min, raw))
-    },
-    [axis, min],
-  )
-
-  const handlePointerUp = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+  const endDrag = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     event.stopPropagation()
     dragStateRef.current = null
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
   }, [])
+
+  const handlePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      if (!dragStateRef.current) return
+      event.stopPropagation()
+      // event.buttons is the live truth of whether a button is still held —
+      // relying solely on receiving a matching pointerup/pointercancel is
+      // fragile (window blur, a native drag interrupting capture, etc. can
+      // all cause it to go missing). Without this check, a missed release
+      // leaves the drag permanently "stuck": the handle stays visually
+      // active and any later hover keeps moving the size.
+      if (event.buttons === 0) {
+        endDrag(event)
+        return
+      }
+      const pos = axis === 'x' ? event.clientX : event.clientY
+      const raw = dragStateRef.current.startSize + (pos - dragStateRef.current.startPos)
+      setOverride(Math.max(min, raw))
+    },
+    [axis, min, endDrag],
+  )
 
   return {
     ref,
@@ -90,7 +101,8 @@ export function useOwnedSize<T extends HTMLElement>(
       ? {
           onPointerDown: handlePointerDown,
           onPointerMove: handlePointerMove,
-          onPointerUp: handlePointerUp,
+          onPointerUp: endDrag,
+          onPointerCancel: endDrag,
         }
       : null,
   }

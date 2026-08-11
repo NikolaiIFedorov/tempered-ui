@@ -226,6 +226,16 @@ handlers; without it, the pointerdown bubbles up and the ancestor's own
 handler (reorder, in that example) steals pointer capture for itself,
 silently breaking the nested drag.
 
+A drag ending is never trusted to arrive as a clean `pointerup` alone —
+window blur, a native drag gesture stealing capture, and similar real
+browser situations can all cause it to go missing, which would otherwise
+leave the drag permanently stuck (the handle stays visually active, and
+the next hover keeps moving the size). Every `pointermove` handler also
+checks `event.buttons`, the live truth of whether a button is actually
+still held, and ends the drag the instant it reads `0` even without a
+matching end event. `pointercancel` is handled the same way as a safety
+net for browser-cancelled gestures.
+
 ## Reposition
 
 An `onReorder` Secondary makes its direct children draggable to reorder
@@ -241,6 +251,13 @@ dragged key to that slot — giving an instant preview during the drag
 rather than waiting for the caller's next render. This needs a stable
 key per child to be meaningful; children without an explicit `key` fall
 back to their index, which isn't a meaningful drag target.
+
+A missing `pointerup` is handled the same way described in Resize: a
+stray `pointermove` with no button held commits the live preview as if
+it were a real release, so a lost end event can't leave an item stuck
+mid-drag. A genuine `pointercancel` instead reverts to the caller's
+actual order without calling `onReorder`, since that's an aborted
+gesture rather than an intentional drop.
 
 ## Animation speed
 
