@@ -5,16 +5,8 @@ import { useMinSizeRegistration } from './registry'
 import { Secondary } from './Secondary'
 import { FakeResizeObserver } from './test-utils/fakeResizeObserver'
 
-function ChildProbe({
-  label,
-  expanded,
-  collapsed,
-}: {
-  label: string
-  expanded: number
-  collapsed: number
-}) {
-  useMinSizeRegistration({ expanded, collapsed })
+function ChildProbe({ label, expanded }: { label: string; expanded: number }) {
+  useMinSizeRegistration({ expanded })
   const isCollapsed = useCollapsed()
   return <div data-testid={label}>{String(isCollapsed)}</div>
 }
@@ -32,8 +24,8 @@ describe('Secondary collapse', () => {
   it("stays expanded while available space covers the sum of children's expanded min sizes", () => {
     render(
       <Secondary>
-        <ChildProbe label="a" expanded={50} collapsed={20} />
-        <ChildProbe label="b" expanded={50} collapsed={20} />
+        <ChildProbe label="a" expanded={50} />
+        <ChildProbe label="b" expanded={50} />
       </Secondary>,
     )
 
@@ -49,8 +41,8 @@ describe('Secondary collapse', () => {
   it('collapses every child at once when available space drops below the required sum', () => {
     render(
       <Secondary>
-        <ChildProbe label="a" expanded={50} collapsed={20} />
-        <ChildProbe label="b" expanded={50} collapsed={20} />
+        <ChildProbe label="a" expanded={50} />
+        <ChildProbe label="b" expanded={50} />
       </Secondary>,
     )
 
@@ -66,8 +58,8 @@ describe('Secondary collapse', () => {
   it('expands again once available space recovers', () => {
     render(
       <Secondary>
-        <ChildProbe label="a" expanded={50} collapsed={20} />
-        <ChildProbe label="b" expanded={50} collapsed={20} />
+        <ChildProbe label="a" expanded={50} />
+        <ChildProbe label="b" expanded={50} />
       </Secondary>,
     )
 
@@ -86,8 +78,8 @@ describe('Secondary collapse', () => {
   it('stays expanded before the first real measurement arrives, even though the required sum is unknown', () => {
     render(
       <Secondary>
-        <ChildProbe label="a" expanded={50} collapsed={20} />
-        <ChildProbe label="b" expanded={50} collapsed={20} />
+        <ChildProbe label="a" expanded={50} />
+        <ChildProbe label="b" expanded={50} />
       </Secondary>,
     )
 
@@ -98,7 +90,7 @@ describe('Secondary collapse', () => {
   it('does not render its children when hidden', () => {
     render(
       <Secondary hidden>
-        <ChildProbe label="a" expanded={50} collapsed={20} />
+        <ChildProbe label="a" expanded={50} />
       </Secondary>,
     )
 
@@ -110,7 +102,7 @@ describe('column-direction root Secondary', () => {
   it('never self-measures — a block element has no genuine external height constraint in ordinary flow', () => {
     render(
       <Secondary direction="column">
-        <ChildProbe label="a" expanded={9999} collapsed={9999} />
+        <ChildProbe label="a" expanded={9999} />
       </Secondary>,
     )
 
@@ -122,7 +114,7 @@ describe('column-direction root Secondary', () => {
   it('stays expanded regardless of how large its children register, avoiding the self-referential trap', () => {
     render(
       <Secondary direction="column">
-        <ChildProbe label="a" expanded={100000} collapsed={50000} />
+        <ChildProbe label="a" expanded={100000} />
       </Secondary>,
     )
 
@@ -134,9 +126,9 @@ describe('nested Secondary collapse cascade', () => {
   it("cascades collapse into a nested Secondary's primaries when the ancestor collapses", () => {
     render(
       <Secondary>
-        <ChildProbe label="a" expanded={50} collapsed={20} />
+        <ChildProbe label="a" expanded={50} />
         <Secondary>
-          <ChildProbe label="nested" expanded={30} collapsed={10} />
+          <ChildProbe label="nested" expanded={30} />
         </Secondary>
       </Secondary>,
     )
@@ -154,9 +146,9 @@ describe('nested Secondary collapse cascade', () => {
   it('does not run its own squeeze detection — a nested Secondary only ever reflects its ancestor', () => {
     render(
       <Secondary>
-        <ChildProbe label="a" expanded={10} collapsed={5} />
+        <ChildProbe label="a" expanded={10} />
         <Secondary>
-          <ChildProbe label="nested" expanded={50} collapsed={20} />
+          <ChildProbe label="nested" expanded={50} />
         </Secondary>
       </Secondary>,
     )
@@ -177,9 +169,9 @@ describe('nested Secondary collapse cascade', () => {
   it('expands the nested Secondary again once the ancestor recovers space, without getting stuck', () => {
     render(
       <Secondary>
-        <ChildProbe label="a" expanded={50} collapsed={20} />
+        <ChildProbe label="a" expanded={50} />
         <Secondary>
-          <ChildProbe label="nested" expanded={30} collapsed={10} />
+          <ChildProbe label="nested" expanded={30} />
         </Secondary>
       </Secondary>,
     )
@@ -200,9 +192,9 @@ describe('nested Secondary collapse cascade', () => {
   it("counts a nested Secondary's own footprint toward its ancestor's collapse threshold", () => {
     render(
       <Secondary>
-        <ChildProbe label="a" expanded={10} collapsed={5} />
+        <ChildProbe label="a" expanded={10} />
         <Secondary>
-          <ChildProbe label="nested" expanded={100} collapsed={40} />
+          <ChildProbe label="nested" expanded={100} />
         </Secondary>
       </Secondary>,
     )
@@ -225,7 +217,7 @@ describe('Secondary overflow (scroll fallback for when even collapsed children d
   it('scrolls along the row axis and clips the cross axis by default', () => {
     render(
       <Secondary>
-        <ChildProbe label="a" expanded={50} collapsed={20} />
+        <ChildProbe label="a" expanded={50} />
       </Secondary>,
     )
 
@@ -240,7 +232,7 @@ describe('Secondary overflow (scroll fallback for when even collapsed children d
   it('scrolls along the column axis and clips the cross axis when direction is column', () => {
     render(
       <Secondary direction="column">
-        <ChildProbe label="a" expanded={50} collapsed={20} />
+        <ChildProbe label="a" expanded={50} />
       </Secondary>,
     )
 
@@ -253,7 +245,7 @@ describe('Secondary overflow (scroll fallback for when even collapsed children d
   it('keeps each child from flex-shrinking below its own size, so overflow scrolls instead of squashing content', () => {
     render(
       <Secondary>
-        <ChildProbe label="a" expanded={50} collapsed={20} />
+        <ChildProbe label="a" expanded={50} />
       </Secondary>,
     )
 
@@ -295,8 +287,8 @@ describe('drag-to-reorder', () => {
   it('does not attach drag handlers when onReorder is not provided', () => {
     const { container } = render(
       <Secondary>
-        <ChildProbe key="a" label="a" expanded={10} collapsed={5} />
-        <ChildProbe key="b" label="b" expanded={10} collapsed={5} />
+        <ChildProbe key="a" label="a" expanded={10} />
+        <ChildProbe key="b" label="b" expanded={10} />
       </Secondary>,
     )
     const a = itemWrapper(container, 'a')
@@ -312,9 +304,9 @@ describe('drag-to-reorder', () => {
     const onReorder = vi.fn()
     const { container } = render(
       <Secondary onReorder={onReorder}>
-        <ChildProbe key="a" label="a" expanded={10} collapsed={5} />
-        <ChildProbe key="b" label="b" expanded={10} collapsed={5} />
-        <ChildProbe key="c" label="c" expanded={10} collapsed={5} />
+        <ChildProbe key="a" label="a" expanded={10} />
+        <ChildProbe key="b" label="b" expanded={10} />
+        <ChildProbe key="c" label="c" expanded={10} />
       </Secondary>,
     )
 
@@ -337,9 +329,9 @@ describe('drag-to-reorder', () => {
     const onReorder = vi.fn()
     const { container } = render(
       <Secondary onReorder={onReorder}>
-        <ChildProbe key="a" label="a" expanded={10} collapsed={5} />
-        <ChildProbe key="b" label="b" expanded={10} collapsed={5} />
-        <ChildProbe key="c" label="c" expanded={10} collapsed={5} />
+        <ChildProbe key="a" label="a" expanded={10} />
+        <ChildProbe key="b" label="b" expanded={10} />
+        <ChildProbe key="c" label="c" expanded={10} />
       </Secondary>,
     )
 
@@ -358,9 +350,9 @@ describe('drag-to-reorder', () => {
   it('shows a live preview order during the drag, before pointerup', () => {
     const { container } = render(
       <Secondary onReorder={vi.fn()}>
-        <ChildProbe key="a" label="a" expanded={10} collapsed={5} />
-        <ChildProbe key="b" label="b" expanded={10} collapsed={5} />
-        <ChildProbe key="c" label="c" expanded={10} collapsed={5} />
+        <ChildProbe key="a" label="a" expanded={10} />
+        <ChildProbe key="b" label="b" expanded={10} />
+        <ChildProbe key="c" label="c" expanded={10} />
       </Secondary>,
     )
 
@@ -376,8 +368,8 @@ describe('drag-to-reorder', () => {
     const onReorder = vi.fn()
     const { container } = render(
       <Secondary onReorder={onReorder}>
-        <ChildProbe key="a" label="a" expanded={10} collapsed={5} />
-        <ChildProbe key="b" label="b" expanded={10} collapsed={5} />
+        <ChildProbe key="a" label="a" expanded={10} />
+        <ChildProbe key="b" label="b" expanded={10} />
       </Secondary>,
     )
 
@@ -397,9 +389,9 @@ describe('drag-to-reorder', () => {
     const onReorder = vi.fn()
     const { container } = render(
       <Secondary onReorder={onReorder}>
-        <ChildProbe key="a" label="a" expanded={10} collapsed={5} />
-        <ChildProbe key="b" label="b" expanded={10} collapsed={5} />
-        <ChildProbe key="c" label="c" expanded={10} collapsed={5} />
+        <ChildProbe key="a" label="a" expanded={10} />
+        <ChildProbe key="b" label="b" expanded={10} />
+        <ChildProbe key="c" label="c" expanded={10} />
       </Secondary>,
     )
 
@@ -425,9 +417,9 @@ describe('drag-to-reorder', () => {
     const onReorder = vi.fn()
     const { container } = render(
       <Secondary onReorder={onReorder}>
-        <ChildProbe key="a" label="a" expanded={10} collapsed={5} />
-        <ChildProbe key="b" label="b" expanded={10} collapsed={5} />
-        <ChildProbe key="c" label="c" expanded={10} collapsed={5} />
+        <ChildProbe key="a" label="a" expanded={10} />
+        <ChildProbe key="b" label="b" expanded={10} />
+        <ChildProbe key="c" label="c" expanded={10} />
       </Secondary>,
     )
 

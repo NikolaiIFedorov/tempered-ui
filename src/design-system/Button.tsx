@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useCollapsed, useLayer, useSecondaryDirection } from './layer'
-import { computeCollapsedContentWidth, PrimaryContent } from './PrimaryContent'
+import { PrimaryContent } from './PrimaryContent'
 import { useMinSizeRegistration } from './registry'
 import { computeInkColor, toCssColor } from './theme'
 import { useTheme } from './ThemeProvider'
@@ -36,17 +36,7 @@ export function Button({ icon, label, onClick, disabled }: ButtonProps) {
     setExpandedSize((previous) => (previous === size ? previous : size))
   }, [collapsed, icon, label, direction])
 
-  // Collapsing only ever hides the label horizontally — a button's height
-  // doesn't shrink when its text disappears — so along the column/height
-  // axis the collapsed footprint is just the same measured size.
-  const collapsedSize =
-    direction === 'row'
-      ? padding * 2 + computeCollapsedContentWidth(layer, Boolean(icon))
-      : (expandedSize ?? 0)
-
-  useMinSizeRegistration(
-    expandedSize === null ? null : { expanded: expandedSize, collapsed: collapsedSize },
-  )
+  useMinSizeRegistration(expandedSize === null ? null : { expanded: expandedSize })
 
   // One layer deeper than the enclosing Secondary's own background — reuses
   // the same layer equation to give the button a distinct surface rather

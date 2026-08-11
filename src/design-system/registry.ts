@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useId } from 'react'
 
 export interface MinSizeEntry {
   expanded: number
-  collapsed: number
 }
 
 export interface MinSizeRegistry {
@@ -18,13 +17,12 @@ export function useMinSizeRegistration(entry: MinSizeEntry | null): void {
   const registry = useContext(MinSizeRegistryContext)
   const id = useId()
   const expanded = entry?.expanded
-  const collapsed = entry?.collapsed
 
   useEffect(() => {
-    if (!registry || expanded === undefined || collapsed === undefined) {
+    if (!registry || expanded === undefined) {
       return
     }
-    registry.register(id, { expanded, collapsed })
+    registry.register(id, { expanded })
     return () => registry.unregister(id)
-  }, [registry, id, expanded, collapsed])
+  }, [registry, id, expanded])
 }

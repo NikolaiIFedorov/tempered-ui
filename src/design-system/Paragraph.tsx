@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { useCollapsed, useLayer, useSecondaryDirection } from './layer'
-import { computeCollapsedContentWidth, PrimaryContent } from './PrimaryContent'
+import { PrimaryContent } from './PrimaryContent'
 import { useMinSizeRegistration } from './registry'
 import { computeInkColor, toCssColor } from './theme'
 import { useTheme } from './ThemeProvider'
@@ -28,15 +28,7 @@ export function Paragraph({ children }: ParagraphProps) {
     setExpandedSize((previous) => (previous === size ? previous : size))
   }, [collapsed, children, direction])
 
-  // Collapsing only ever hides text horizontally — it never changes how
-  // tall a single line of text is — so along the column/height axis the
-  // collapsed footprint is just the same measured size as expanded.
-  const collapsedSize =
-    direction === 'row' ? computeCollapsedContentWidth(layer, false) : (expandedSize ?? 0)
-
-  useMinSizeRegistration(
-    expandedSize === null ? null : { expanded: expandedSize, collapsed: collapsedSize },
-  )
+  useMinSizeRegistration(expandedSize === null ? null : { expanded: expandedSize })
 
   // Paragraph has no background of its own — it sits directly on whatever
   // its enclosing Secondary paints, so its ink matches that same surface.

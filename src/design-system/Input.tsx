@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useCollapsed, useLayer, useSecondaryDirection } from './layer'
-import { computeCollapsedContentWidth, PrimaryContent } from './PrimaryContent'
+import { PrimaryContent } from './PrimaryContent'
 import { useMinSizeRegistration } from './registry'
 import { computeInkColor, toCssColor } from './theme'
 import { useTheme } from './ThemeProvider'
@@ -54,24 +54,13 @@ export function Input({ icon, label, value, onChange, placeholder, disabled }: I
     }
   }, [collapsed, icon, label, direction])
 
-  // Collapsing only ever hides the prefix label horizontally — it never
-  // changes Input's height — so along the column/height axis the collapsed
-  // footprint is just the same measured size as expanded.
-  const collapsedSize =
-    direction === 'row'
-      ? computeCollapsedContentWidth(layer, Boolean(icon)) + gap + fieldWidth
-      : (expandedSize ?? 0)
-
   // border-box makes the input's real rendered width exactly fieldWidth
   // regardless of its padding/border, so no separate chrome tracking is
-  // needed for the field itself — only the value never collapses below it.
+  // needed for the field itself.
   useMinSizeRegistration(
     expandedSize === null
       ? null
-      : {
-          expanded: direction === 'row' ? expandedSize + gap + fieldWidth : expandedSize,
-          collapsed: collapsedSize,
-        },
+      : { expanded: direction === 'row' ? expandedSize + gap + fieldWidth : expandedSize },
   )
 
   // The prefix sits directly on the enclosing Secondary's own background

@@ -77,24 +77,19 @@ export function Secondary({
   const recompute = useCallback(
     (availableSize: number) => {
       let requiredExpanded = 0
-      let requiredCollapsed = 0
       for (const entry of entries.current.values()) {
         requiredExpanded += entry.expanded
-        requiredCollapsed += entry.collapsed
       }
       const itemCount = entries.current.size
       const gap = computeSize(layer, GAP_SCALE)
       const gapTotal = gap * Math.max(0, itemCount - 1)
       const paddingTotal = computeSize(layer, PADDING_SCALE) * 2
       requiredExpanded += gapTotal + paddingTotal
-      requiredCollapsed += gapTotal + paddingTotal
 
       setFootprint((previous) =>
-        previous &&
-        previous.expanded === requiredExpanded &&
-        previous.collapsed === requiredCollapsed
+        previous && previous.expanded === requiredExpanded
           ? previous
-          : { expanded: requiredExpanded, collapsed: requiredCollapsed },
+          : { expanded: requiredExpanded },
       )
 
       if (selfMeasures && hasMeasured.current) {

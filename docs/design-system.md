@@ -137,14 +137,19 @@ space drops below that requirement, the container collapses its Primary
 children:
 
 1. Each Primary switches to icon-only representation, dropping its text
-   label. Its collapsed `minSize` floor is much smaller than expanded.
+   label — its actual rendered size shrinks accordingly, but this is a
+   rendering decision, not something separately registered: the threshold
+   that triggered the collapse in the first place is based purely on each
+   Primary's *expanded* `minSize`.
 2. A Primary with no icon (paragraph, plain label) collapses to a
    fixed-width ellipsized fragment instead.
 3. If children still don't fit after every Primary has collapsed, the
    container falls back to scrolling along its own layout axis rather than
    clipping or hiding anything — children don't flex-shrink past their
-   collapsed size, so the browser overflows into a scrollbar instead of
-   squashing content.
+   collapsed rendered size, so the browser overflows into a scrollbar
+   instead of squashing content. This is ordinary CSS (`flexShrink: 0` +
+   `overflow: auto`), not something computed — nothing needs to know in
+   advance how large a collapsed row will be.
 
 Only a root Secondary (`layer 0`, no enclosing Secondary) with
 `direction="row"` measures its own available space. A nested Secondary is
@@ -165,18 +170,17 @@ nested beneath it collapses too, at any depth.
 
 A nested Secondary still contributes to whether its *ancestor* needs to
 collapse: it reports its own aggregate footprint (the sum of its own
-children, expanded and collapsed) up to the ancestor's threshold
-calculation, the same way a Primary reports its own `minSize`. So the
-root's collapse decision accounts for nested subtrees even though only
-the root does any actual measuring.
+children's expanded sizes) up to the ancestor's threshold calculation, the
+same way a Primary reports its own `minSize`. So the root's collapse
+decision accounts for nested subtrees even though only the root does any
+actual measuring.
 
 A registering Primary measures whichever axis its nearest enclosing
 Secondary actually lays children out on and compares against — width for
-`direction="row"`, height for `direction="column"`. Collapsing only ever
-hides a label horizontally; it never changes how tall a Primary renders.
-So along the height axis, the collapsed footprint a Primary reports is
-just the same measured size as its expanded one — only the width axis
-needs the analytical icon/ellipsis-based formula.
+`direction="row"`, height for `direction="column"`. Only one number is
+ever registered per Primary (its expanded size along that axis) — there's
+no separate collapsed size to track, since the collapse threshold is only
+ever compared against the expanded requirement in the first place.
 
 ## Reposition
 
