@@ -183,48 +183,57 @@ needs the analytical icon/ellipsis-based formula.
 
 Only a Secondary is user-resizable — a Primary's size always follows from
 its content and its enclosing Secondary's collapse state, never from its
-own drag handle. A Secondary's own size is owned locally, the same
-broadcast-and-locally-own pattern `layer`/`direction`/`collapsed` already
-use for everything else — not something a parent computes or holds the
-pixel value for on a child's behalf. `useOwnedSize(defaultSize, { axis,
-min, enabled })` is the primitive behind it: it holds an optional local
-override (`null` until the user drags), exposes `size` (`override ??
-defaultSize`), and returns ready-to-spread pointer handlers for a drag
-handle. `resizable` on a Secondary grants it a drag handle; it doesn't
-broadcast anything downward, since no Primary needs the capability.
+own drag handle. Dragging a Secondary's handle toggles it between fully
+expanded and fully collapsed, snapping partway through the drag, rather
+than resolving to an arbitrary width: a Secondary's job is organizing its
+children, and how much of that organization is currently visible is
+inherently a two-state decision — the same one collapse already makes for
+it, just now user-driven instead of purely space-driven. `resizable`
+grants a Secondary a drag handle; it doesn't broadcast anything downward,
+since no Primary needs the capability.
 
-**Root Secondary (`layer 0`, `direction="row"`).** Its `useOwnedSize` ref
-attaches to the same measurement wrapper `ResizeObserver` already watches,
-so a drag flows through the identical threshold path a real viewport
-resize uses — collapse-on-drag falls out of code that already exists
-rather than needing its own. The drag has a floor (`requiredCollapsed` —
-can't shrink below the point where even fully-collapsed content fits) but
-no explicit JS-level ceiling: the wrapper's own `maxWidth: 100%` is the
-real ceiling (true available space). Capping the drag at exactly
-`requiredExpanded` in code was tried and reverted — it's a knife's-edge
-value where the JS-computed clamp and what the browser reports back
-through `ResizeObserver` after actual layout (with its own subpixel
-rounding) don't perfectly agree, so a drag aimed at "fully expanded"
-would land just under the threshold and stay collapsed no matter how far
-out it was dragged.
+The drag still tracks the cursor the way a continuous resize would (a
+start width plus the raw pointer delta), but only to decide which side of
+the midpoint between the expanded and collapsed footprints the cursor
+lands on — the box snaps to that footprint's exact width live as soon as
+the midpoint is crossed, not to wherever the cursor currently sits. This
+mirrors the read of the reordering swap-preview in Reposition: the result
+is decided by a threshold crossing, not tracked continuously.
 
-**Nested Secondary.** It never self-measures (see Collapse), so its
-`useOwnedSize` ref attaches directly to its own flex row instead of a
-separate measurement wrapper, and its collapse decision is computed
-directly rather than through a `ResizeObserver`: `size < requiredExpanded`
-once it's been dragged, `false` otherwise. That's combined with the
-inherited ancestor cascade via OR — a nested Secondary can collapse
-because *it* was dragged narrow, or because its ancestor was, whichever
-comes first. This OR is safe here in a way it isn't for self-measurement:
-the size came from direct pointer input, not from a box measuring its own
-rendered size, so there's no self-referential trap.
+**Root Secondary (`layer 0`, `direction="row"`).** Snapping to collapsed
+sets the measurement wrapper's width to the exact `requiredCollapsed`
+value — safe, since `ResizeObserver` reporting that back is nowhere near
+the collapse threshold. Snapping to expanded, however, sets the wrapper's
+width back to `100%` (real measured space) rather than an exact
+`requiredExpanded` value: the root re-derives its own collapse by
+comparing `ResizeObserver`'s measured width against that exact same
+threshold, so forcing the two to match precisely is a knife's edge — real
+subpixel rounding in what the browser reports back can read a hair under
+the threshold and immediately re-collapse it. This is the same class of
+bug a continuous drag used to hit trying to clamp its ceiling at exactly
+`requiredExpanded`; binary snapping doesn't remove the risk, it just
+means every "expanded" drag would land exactly on that edge instead of
+occasionally, so deferring to `100%` (the same value used before any drag
+at all) sidesteps it entirely rather than trying to out-precision it.
+
+**Nested Secondary.** It never self-measures (see Collapse), so both snap
+states set its own flex row's width directly to an exact footprint value,
+and its collapse decision is the literal boolean the drag landed on —
+`manualCollapsed`, not something recomputed by measuring the row's own
+rendered size. That's combined with the inherited ancestor cascade via
+OR — a nested Secondary can collapse because *it* was dragged closed, or
+because its ancestor was, whichever comes first. This OR is safe here in
+a way it isn't for self-measurement: the state came from a direct pointer
+threshold crossing, not from a box measuring its own rendered size, so
+there's no self-referential trap, and no knife's edge either — nothing
+here re-derives collapse from a measurement of the snapped width.
 
 A resize handle nested inside an ancestor's own drag surface — e.g. a
 resizable nested Secondary's handle sitting inside the root's reorderable
-item wrapper — needs `event.stopPropagation()` in `useOwnedSize`'s pointer
-handlers; without it, the pointerdown bubbles up and the ancestor's own
-handler (reorder, in that example) steals pointer capture for itself,
-silently breaking the nested drag.
+item wrapper — needs `event.stopPropagation()` in its pointer handlers;
+without it, the pointerdown bubbles up and the ancestor's own handler
+(reorder, in that example) steals pointer capture for itself, silently
+breaking the nested drag.
 
 A drag ending is never trusted to arrive as a clean `pointerup` alone —
 window blur, a native drag gesture stealing capture, and similar real
@@ -234,7 +243,10 @@ the next hover keeps moving the size). Every `pointermove` handler also
 checks `event.buttons`, the live truth of whether a button is actually
 still held, and ends the drag the instant it reads `0` even without a
 matching end event. `pointercancel` is handled the same way as a safety
-net for browser-cancelled gestures.
+net for browser-cancelled gestures. Unlike Reposition, this doesn't need
+window-level listeners — a resize handle's own DOM position never moves
+during its drag (only the row's width changes around it), so it isn't
+exposed to the `lostpointercapture` failure mode reordering has.
 
 ## Reposition
 

@@ -1,5 +1,13 @@
-import { Children, isValidElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import {
+  Children,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import {
   CollapseProvider,
   DirectionProvider,
@@ -11,13 +19,16 @@ import { type MinSizeEntry, MinSizeRegistryProvider, useMinSizeRegistration } fr
 import { computeInkColor, toCssColor } from './theme'
 import { useTheme } from './ThemeProvider'
 import { computeSize } from './tokens'
-import { useOwnedSize } from './useOwnedSize'
 
 export interface SecondaryProps {
   direction?: 'row' | 'column'
   hidden?: boolean
   // Only Secondary components are user-resizable — grants this Secondary
-  // itself a drag handle. Primary children never resize independently.
+  // itself a drag handle. Dragging it toggles between fully expanded and
+  // fully collapsed (snapping partway through the drag) rather than
+  // resolving to an arbitrary width: a Secondary's job is organizing its
+  // children, and how much of that organization is visible is inherently
+  // a two-state decision, the same one collapse already makes for it.
   resizable?: boolean
   // Reordering is a controlled operation, the same way a controlled
   // <input> reports changes instead of owning its own value: Secondary
@@ -70,6 +81,14 @@ export function Secondary({
   const hasMeasured = useRef(false)
   const [ownCollapsed, setOwnCollapsed] = useState(false)
   const [footprint, setFootprint] = useState<MinSizeEntry | null>(null)
+  // A manual override from dragging this Secondary's own handle: null
+  // until dragged, then always one of the two states (see the resizable
+  // prop's doc comment for why this is boolean rather than a continuous
+  // size). The root still measures real available space the same as
+  // before — this only changes what a *drag* resolves to.
+  const [manualCollapsed, setManualCollapsed] = useState<boolean | null>(null)
+  const measureRef = useRef<HTMLDivElement>(null)
+  const dragStateRef = useRef<{ startPos: number; startWidth: number } | null>(null)
 
   // Reordering: dragOrder is the live preview order while actively
   // dragging (null the rest of the time, meaning "render children in
@@ -111,17 +130,6 @@ export function Secondary({
     [layer, selfMeasures, resizable],
   )
 
-  // This Secondary's own size — owned locally like everything else, via
-  // the same hook a resizable Primary uses, rather than the bespoke drag
-  // state this used to carry. Only the root also feeds a real
-  // ResizeObserver reading through this same pipeline (below); a nested
-  // Secondary's size here is driven purely by the user's drag, if any.
-  const owned = useOwnedSize<HTMLDivElement>(footprint?.expanded ?? 0, {
-    axis: 'x',
-    min: footprint?.collapsed ?? 0,
-    enabled: resizable,
-  })
-
   // Reports this Secondary's own aggregate footprint to its ancestor's
   // registry (a no-op for the root, which has no ancestor registry), so
   // the ancestor's own collapse threshold accounts for nested subtrees
@@ -144,7 +152,7 @@ export function Secondary({
 
   useEffect(() => {
     if (!selfMeasures) return
-    const node = owned.ref.current
+    const node = measureRef.current
     if (!node) return
     const observer = new ResizeObserver((observedEntries) => {
       const [entry] = observedEntries
@@ -155,17 +163,79 @@ export function Secondary({
     })
     observer.observe(node)
     return () => observer.disconnect()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recompute, selfMeasures, owned.ref])
+  }, [recompute, selfMeasures])
 
-  // A nested Secondary that's been explicitly dragged narrower than its
-  // own required width collapses its own Primaries, independent of its
-  // ancestor — this doesn't need self-measurement's safety concerns
-  // because the size came from direct pointer input, not from the box
-  // observing its own rendered size.
-  const ownCollapsedFromDrag =
-    !selfMeasures && owned.isOverridden ? owned.size < (footprint?.expanded ?? 0) : false
+  // A nested Secondary that's been explicitly dragged into its collapsed
+  // state collapses its own Primaries, independent of its ancestor — this
+  // doesn't need self-measurement's safety concerns because the state
+  // came from direct pointer input, not from the box observing its own
+  // rendered size.
+  const ownCollapsedFromDrag = !selfMeasures ? (manualCollapsed ?? false) : false
   const collapsed = selfMeasures ? ownCollapsed : ancestorCollapsed || ownCollapsedFromDrag
+
+  // Drag handling for this Secondary's own resize handle. The drag tracks
+  // the cursor the same way a continuous resize would (start width + raw
+  // delta), but only ever to decide which side of the midpoint between the
+  // expanded and collapsed footprints the cursor is on — snapping the
+  // whole box to that footprint's exact width live, rather than to
+  // wherever the cursor currently sits.
+  const endResizeDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    event.stopPropagation()
+    dragStateRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }, [])
+
+  const handleResizePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!dragStateRef.current) return
+      event.stopPropagation()
+      // event.buttons is the live truth of whether a button is still
+      // held — a fallback in case a pointerup/pointercancel ever goes
+      // missing (see the same pattern in Reposition).
+      if (event.buttons === 0) {
+        endResizeDrag(event)
+        return
+      }
+      const raw = dragStateRef.current.startWidth + (event.clientX - dragStateRef.current.startPos)
+      const midpoint = ((footprint?.expanded ?? 0) + (footprint?.collapsed ?? 0)) / 2
+      setManualCollapsed(raw < midpoint)
+    },
+    [footprint, endResizeDrag],
+  )
+
+  const handleResizePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      // A resize handle can end up nested inside an ancestor's own drag
+      // surface (e.g. this handle sitting inside the root's reorderable
+      // item wrapper) — without stopPropagation, the pointerdown also
+      // bubbles up and the ancestor's own handler steals pointer capture
+      // for itself, breaking this drag entirely.
+      event.stopPropagation()
+      event.currentTarget.setPointerCapture(event.pointerId)
+      dragStateRef.current = {
+        startPos: event.clientX,
+        startWidth: collapsed ? (footprint?.collapsed ?? 0) : (footprint?.expanded ?? 0),
+      }
+    },
+    [collapsed, footprint],
+  )
+
+  // Used by a nested Secondary's own flexRow, which has no independent
+  // measurement to fall back on — both snap states need an exact width.
+  const explicitWidth =
+    manualCollapsed === null ? null : manualCollapsed ? (footprint?.collapsed ?? 0) : (footprint?.expanded ?? 0)
+
+  // Used by the root's measurement wrapper. Snapping to "expanded" here
+  // must defer to '100%' (real measured space) rather than an exact
+  // requiredExpanded pixel value: the root re-derives its own collapse
+  // state by comparing ResizeObserver's measured width against that same
+  // threshold, and forcing an exact match is a knife's edge — subpixel
+  // rounding in what the browser reports back can land a hair under the
+  // threshold and immediately re-collapse it. "Collapsed" has no such
+  // risk, since requiredCollapsed sits comfortably below the threshold.
+  const wrapperWidth = manualCollapsed === true ? (footprint?.collapsed ?? 0) : '100%'
 
   // Reordering visibly moves the dragged item's DOM node to a new sibling
   // position on every step — and moving a node that holds native pointer
@@ -265,7 +335,6 @@ export function Secondary({
 
   const flexRow = (
     <div
-      ref={selfMeasures ? undefined : owned.ref}
       className={className}
       style={{
         display: 'flex',
@@ -273,8 +342,9 @@ export function Secondary({
         // Hugs its content's width instead of filling its parent (matching
         // what a toolbar should look like), but still clamps down to the
         // parent's real available space when that's smaller — unless the
-        // user has explicitly dragged this Secondary wider/narrower.
-        width: !selfMeasures && owned.isOverridden ? owned.size : 'fit-content',
+        // user has explicitly dragged this Secondary to one of its two
+        // snap states.
+        width: !selfMeasures && explicitWidth !== null ? explicitWidth : 'fit-content',
         maxWidth: '100%',
         // Its own padding must count toward width/maxWidth, not sit outside
         // them — with the default content-box, a maxWidth: 100% cap still
@@ -311,11 +381,14 @@ export function Secondary({
           {keyedChildren.get(key)}
         </div>
       ))}
-      {resizable && owned.handleProps ? (
+      {resizable ? (
         <div
           role="separator"
           aria-orientation="vertical"
-          {...owned.handleProps}
+          onPointerDown={handleResizePointerDown}
+          onPointerMove={handleResizePointerMove}
+          onPointerUp={endResizeDrag}
+          onPointerCancel={endResizeDrag}
           style={{
             flexShrink: 0,
             alignSelf: 'stretch',
@@ -341,13 +414,10 @@ export function Secondary({
               // collapse decision back as "not enough room" and get stuck.
               // This invisible width: 100% wrapper is what's measured; the
               // fit-content, visually-styled row lives inside it, unmeasured.
-              // A drag sets an explicit width instead of 100% — maxWidth
-              // still applies, so a real viewport shrink below the dragged
-              // width still wins and gets measured correctly.
-              <div
-                ref={owned.ref}
-                style={{ width: owned.isOverridden ? owned.size : '100%', maxWidth: '100%' }}
-              >
+              // A drag toward collapsed sets an explicit width — maxWidth
+              // still applies, so a real viewport shrink below that width
+              // still wins and gets measured correctly.
+              <div ref={measureRef} style={{ width: wrapperWidth, maxWidth: '100%' }}>
                 {flexRow}
               </div>
             ) : (
