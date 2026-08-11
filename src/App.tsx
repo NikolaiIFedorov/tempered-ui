@@ -1,12 +1,14 @@
-import { Fragment, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { Button } from './design-system/Button'
 import { Input } from './design-system/Input'
-import { useCollapsed } from './design-system/layer'
+import { useCollapsed, useLayer } from './design-system/layer'
 import { Paragraph } from './design-system/Paragraph'
+import { useMinSizeRegistration } from './design-system/registry'
 import { Secondary } from './design-system/Secondary'
 import { toCssColor } from './design-system/theme'
 import { ThemeProvider, useTheme } from './design-system/ThemeProvider'
+import { computeSize } from './design-system/tokens'
 
 function SaveIcon() {
   return (
@@ -89,42 +91,168 @@ interface Action {
 
 const extrudeAction: Action = {
   run: (values) => console.log('extrude', values),
-  params: [{ key: 'depth', label: 'Depth', defaultValue: '10' }],
+  params: [
+    { key: 'depth', label: 'Depth', defaultValue: '10' },
+    { key: 'twist', label: 'Twist', defaultValue: '0' },
+  ],
 }
 
-// Input's own collapse behavior keeps its field visible and editable even
-// when collapsed (only the label drops) — right for a value the user set
-// intentionally, wrong for a parameter that's supposed to stay hidden
-// until the action's own box is expanded. This reads the *nested*
-// Secondary's own collapse state (not an ancestor's), which only exists
-// once React actually renders that Secondary — a plain function called
-// during the parent's render can't reach it, since the Provider it needs
-// doesn't exist yet at that point.
-//
-// Hiding must be visual only (display: none), never a conditional unmount
-// — every registered min-size footprint is supposed to be a fixed
-// {expanded, collapsed} pair, unconditionally true regardless of current
-// render state (that's the whole point: it's what the ancestor's collapse
-// *decision* is based on). Unmounting the Input on collapse un-registers
-// it, shrinking this Secondary's own reported footprint, which can shrink
-// the root's required width enough to un-collapse it — which re-expands
-// this Secondary, remounting the Input, growing the footprint back,
-// re-collapsing the root — an infinite loop. display: contents keeps the
-// Input mounted (stable registration, real layout for its own
-// measurement) while still letting its children act as direct flex items
-// of the surrounding row.
-function CollapsibleParams({ children }: { children: ReactNode }) {
+const PARAM_GAP_SCALE = { baseSize: 8, shrinkRatio: 0.85, minSize: 2 }
+const HANDLE_WIDTH = 6
+
+interface StagedActionProps {
+  icon: ReactNode
+  label: string
+  action: Action
+  values: Record<string, string>
+  onValuesChange: (values: Record<string, string>) => void
+}
+
+// Drives which of an action's parameters are currently visible via its own
+// drag handle. N params means N+1 stages — all shown, down to none — each
+// snapped to the same way Secondary's own binary resize snaps to one of
+// two: the drag tracks a start width plus the raw pointer delta, and jumps
+// to whichever stage's width the cursor has crossed the midpoint toward.
+// Once every param is hidden, the ancestor's ordinary collapse-to-icon
+// behavior takes the final step, so this only ever governs the params —
+// it doesn't duplicate that mechanism, it chains into it.
+function StagedAction({ icon, label, action, values, onValuesChange }: StagedActionProps) {
+  // Reads the *enclosing* Secondary's own collapse state, which only
+  // exists once React actually renders that Secondary as an ancestor of
+  // this component — this only works because StagedAction is rendered
+  // *inside* it, not because it's called during the parent's render.
   const collapsed = useCollapsed()
-  return <span style={{ display: collapsed ? 'none' : 'contents' }}>{children}</span>
+  const layer = useLayer()
+  const buttonRef = useRef<HTMLSpanElement>(null)
+  const paramRefs = useRef<Array<HTMLSpanElement | null>>([])
+  const stageWidthsRef = useRef<number[] | null>(null)
+  const dragStateRef = useRef<{ startPos: number; startWidth: number } | null>(null)
+  const [visibleCount, setVisibleCount] = useState(action.params.length)
+
+  // Measured once, while every param is still visible (the initial
+  // render) — mirrors Input freezing its own measurement once collapsed,
+  // so a later hidden stage never needs to re-measure a display: none
+  // element (which would just read back a width of 0). The gap between
+  // items is read directly off real layout rather than duplicating
+  // Secondary's own gap token, so it stays correct regardless of what
+  // that token's tuned to.
+  useLayoutEffect(() => {
+    if (stageWidthsRef.current || !buttonRef.current) return
+    const buttonRect = buttonRef.current.getBoundingClientRect()
+    const paramRects = paramRefs.current.map((el) => el?.getBoundingClientRect())
+    if (paramRects.some((rect) => !rect)) return
+    const gap = paramRects[0] ? paramRects[0]!.left - buttonRect.right : 0
+    const widths = [buttonRect.width]
+    let running = buttonRect.width
+    for (const rect of paramRects) {
+      running += gap + rect!.width
+      widths.push(running)
+    }
+    stageWidthsRef.current = widths
+  })
+
+  const endDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    event.stopPropagation()
+    dragStateRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }, [])
+
+  const handlePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!dragStateRef.current || !stageWidthsRef.current) return
+      event.stopPropagation()
+      if (event.buttons === 0) {
+        endDrag(event)
+        return
+      }
+      const raw = dragStateRef.current.startWidth + (event.clientX - dragStateRef.current.startPos)
+      const widths = stageWidthsRef.current
+      let chosen = 0
+      for (let stage = 1; stage < widths.length; stage++) {
+        const midpoint = (widths[stage - 1] + widths[stage]) / 2
+        if (raw >= midpoint) chosen = stage
+      }
+      setVisibleCount(chosen)
+    },
+    [endDrag],
+  )
+
+  const handlePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!stageWidthsRef.current) return
+      event.stopPropagation()
+      event.currentTarget.setPointerCapture(event.pointerId)
+      dragStateRef.current = {
+        startPos: event.clientX,
+        startWidth: stageWidthsRef.current[visibleCount],
+      }
+    },
+    [visibleCount],
+  )
+
+  // The handle itself takes real space that the ancestor's own threshold
+  // math needs to know about, the same way Secondary counts its own
+  // handle's width — it isn't a Primary, so it has to register directly
+  // rather than getting this for free.
+  useMinSizeRegistration({ expanded: HANDLE_WIDTH, collapsed: HANDLE_WIDTH })
+
+  // The ancestor's own collapse (root too small for anything but icons)
+  // overrides whatever stage was dragged to — the same OR-cascade
+  // Secondary itself uses for its binary case.
+  const effectiveVisibleCount = collapsed ? 0 : visibleCount
+
+  return (
+    <span
+      style={{ display: 'inline-flex', alignItems: 'center', gap: computeSize(layer, PARAM_GAP_SCALE) }}
+    >
+      <span ref={buttonRef}>
+        <Button icon={icon} label={label} onClick={() => action.run(values)} />
+      </span>
+      {action.params.map((param, index) => (
+        <span
+          key={param.key}
+          ref={(el) => {
+            paramRefs.current[index] = el
+          }}
+          style={{ display: index < effectiveVisibleCount ? undefined : 'none' }}
+        >
+          <Input
+            label={param.label}
+            value={values[param.key] ?? param.defaultValue}
+            onChange={(value) => onValuesChange({ ...values, [param.key]: value })}
+          />
+        </span>
+      ))}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        style={{
+          flexShrink: 0,
+          alignSelf: 'stretch',
+          width: HANDLE_WIDTH,
+          cursor: 'col-resize',
+          touchAction: 'none',
+        }}
+      />
+    </span>
+  )
 }
 
-// A parameterized action renders as a resizable Secondary containing the
-// button plus one Input per parameter — reusing collapse/resize exactly
-// as built, rather than a bespoke "expandable Primary" concept. Nesting
-// the params inside the button's own box (instead of beside it as a
-// sibling) is what makes expanding read as "this button's own detail"
-// and not an unrelated adjacent control, and gives each action its own
-// independent expand state even when several sit in the same toolbar.
+// A parameterized action renders as a Secondary containing StagedAction,
+// which owns the button, the params, and its own drag handle — reusing
+// Secondary purely for its visuals and collapse cascade (background,
+// padding, radius, and the "ancestor too small" override), not its own
+// binary resize mechanism, which doesn't fit an N-stage decision. Nesting
+// the params inside the button's own box, rather than beside it as a
+// sibling, is what makes expanding read as "this button's own detail" and
+// not an unrelated adjacent control, and gives each parameterized action
+// its own independent stage even when several sit in the same toolbar.
 function renderAction(
   key: string,
   icon: ReactNode,
@@ -133,23 +261,18 @@ function renderAction(
   values: Record<string, string>,
   onValuesChange: (values: Record<string, string>) => void,
 ) {
-  const button = <Button icon={icon} label={label} onClick={() => action.run(values)} />
   if (action.params.length === 0) {
-    return <Fragment key={key}>{button}</Fragment>
+    return <Button key={key} icon={icon} label={label} onClick={() => action.run(values)} />
   }
   return (
-    <Secondary key={key} resizable>
-      {button}
-      <CollapsibleParams>
-        {action.params.map((param) => (
-          <Input
-            key={param.key}
-            label={param.label}
-            value={values[param.key] ?? param.defaultValue}
-            onChange={(value) => onValuesChange({ ...values, [param.key]: value })}
-          />
-        ))}
-      </CollapsibleParams>
+    <Secondary key={key}>
+      <StagedAction
+        icon={icon}
+        label={label}
+        action={action}
+        values={values}
+        onValuesChange={onValuesChange}
+      />
     </Secondary>
   )
 }
@@ -188,7 +311,10 @@ function renderToolbarItem(
 
 function AppContent() {
   const [width, setWidth] = useState('42')
-  const [extrudeValues, setExtrudeValues] = useState<Record<string, string>>({ depth: '10' })
+  const [extrudeValues, setExtrudeValues] = useState<Record<string, string>>({
+    depth: '10',
+    twist: '0',
+  })
   const [order, setOrder] = useState(['save', 'cancel', 'width', 'extrude'])
   const theme = useTheme()
 

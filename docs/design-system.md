@@ -13,33 +13,60 @@ groups) — a Primary's own footprint is always a function of its content and
 its enclosing Secondary's collapse state, never something the user drags
 independently.
 
-A Primary that takes parameters (an Extrude button with a depth) isn't a
-third component kind — it's a resizable nested Secondary containing the
-button plus one Input per parameter, with the params visually hidden
-until that Secondary is expanded (Input's own collapsed form still keeps
-its field visible, which is right for a value the user set on purpose but
-wrong for a parameter meant to stay hidden until revealed). Nesting the
-params inside the button's own box, rather than placing them beside it as
-a sibling, is what makes expanding read as "this button's own detail"
-instead of an unrelated adjacent control, and gives each parameterized
-action its own independent expand state even when several sit in the same
-toolbar. This is ordinary composition of existing primitives, not a new
-mechanism — a parameter schema declared next to a callback (not
-reflection over the callback itself, which can't recover a type, range,
-or label to generate a real control from) is enough to build it entirely
-in application code.
+A Primary that takes parameters (an Extrude button with depth and twist)
+isn't a third component kind — it's a plain Secondary (for its background,
+padding, radius, and collapse cascade) containing the button plus one
+Input per parameter, with a dedicated `StagedAction` component owning
+which params currently show. Nesting the params inside the button's own
+box, rather than placing them beside it as a sibling, is what makes
+revealing them read as "this button's own detail" instead of an unrelated
+adjacent control, and gives each parameterized action its own independent
+stage even when several sit in the same toolbar. This is composition on
+top of existing primitives, not a new component kind — a parameter schema
+declared next to a callback (not reflection over the callback itself,
+which can't recover a type, range, or label to generate a real control
+from) is enough to build it entirely in application code.
 
-Hiding the params must be purely visual (`display: none`), never a
+**N-stage collapse.** With N params there are N+1 stages — all shown,
+down to none — and `StagedAction` owns its own drag handle to move
+between them, rather than reusing Secondary's binary `resizable`: dropping
+one parameter at a time as space shrinks is a different decision than
+Secondary's "is there room for everything or not," not a generalization
+of it. The drag still tracks a start width plus the raw pointer delta the
+same way Secondary's binary snap does; the only difference is checking N
+midpoints (one between each pair of adjacent stage widths) instead of
+one, jumping to whichever stage the cursor has crossed toward. Once every
+param is hidden, the *enclosing Secondary's* ordinary collapse-to-icon
+behavior takes the final step (dropping the button's own label) — so this
+mechanism only ever governs the params, chaining into collapse rather
+than duplicating it. Params drop from the end of the list first (most
+important parameter declared first survives longest).
+
+Each stage width is measured directly off real layout (a ref on the
+button and one on each param, read via `getBoundingClientRect` once,
+while every param is still visible at mount) rather than duplicating
+Secondary's internal gap token — reading the actual rendered gap between
+the button and the first param stays correct regardless of what that
+token is tuned to. The ref used purely for measurement must have a real
+box: `display: contents` (as used elsewhere to keep a wrapper transparent
+to flex layout) generates no box at all, so `getBoundingClientRect` on
+such an element always reads back zero — a real, not hypothetical, bug
+hit while building this.
+
+Hiding a param must be purely visual (`display: none`), never a
 conditional unmount — every registered min-size footprint is meant to be
 a fixed `{expanded, collapsed}` pair, true regardless of current render
 state, since that pair is what an ancestor's own collapse *decision*
-reads. Unmounting a param's Input on collapse un-registers it, shrinking
-this Secondary's own reported footprint — which can shrink the root's
-required width enough to un-collapse it, which re-expands this Secondary,
-remounting the Input, growing the footprint back, re-collapsing the
-root — a real infinite render loop, not a hypothetical one. Keeping the
-Input mounted (via `display: contents` on a wrapper when visible) keeps
-its registration stable while still hiding it.
+reads. Unmounting a param's Input on hide un-registers it, shrinking the
+enclosing Secondary's own reported footprint — which can shrink the
+root's required width enough to un-collapse it, which re-expands the
+enclosing Secondary, remounting the Input, growing the footprint back,
+re-collapsing the root — a real infinite render loop, not a hypothetical
+one, hit and confirmed live while building this (dozens of flips per
+second). `StagedAction`'s own resize handle has the same accounting
+concern Secondary's does: it takes real space the ancestor's threshold
+math needs to know about, so it registers its own fixed-width min-size
+entry directly rather than getting this for free the way a Primary would.
 
 ## Layer
 
