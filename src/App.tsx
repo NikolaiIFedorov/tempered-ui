@@ -185,12 +185,14 @@ function AppContent() {
         {activeTool ? (
           // Default position only, achieved for free by sitting in the same
           // grid cell as the (otherwise empty) canvas area — top-left of
-          // it, just below the misc bar (the margin nudges it in from the
-          // edges). Free repositioning is deferred: onReorder only swaps
-          // items within one Secondary's own list, it doesn't do free 2D
-          // placement, and desktop position doesn't actually matter here
-          // (touch enforces top-left as the reachable corner regardless).
-          <Secondary style={{ gridArea: 'canvas', margin: 12 }}>
+          // it, just below the misc bar. The grid's own gap already spaces
+          // it from the tools/misc bars, same as every other cell — no
+          // margin of its own needed on top of that. Free repositioning is
+          // deferred: onReorder only swaps items within one Secondary's
+          // own list, it doesn't do free 2D placement, and desktop
+          // position doesn't actually matter here (touch enforces top-left
+          // as the reachable corner regardless).
+          <Secondary style={{ gridArea: 'canvas' }}>
             <Button icon={activeTool.icon} label={activeTool.label} />
           </Secondary>
         ) : null}
