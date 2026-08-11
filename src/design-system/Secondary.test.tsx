@@ -497,6 +497,34 @@ describe('drag-to-reorder', () => {
     expect(onReorder).toHaveBeenCalledWith(['b', 'a', 'c'])
   })
 
+  it('still commits and clears the dimmed state when the release lands on a different element entirely', () => {
+    // Reordering moves the dragged item's own DOM node to a new sibling
+    // position on every step, which makes real browsers silently drop
+    // native pointer capture mid-drag — so the eventual pointerup can land
+    // on whatever's actually under the cursor rather than the item that
+    // started the drag. Tracking is done via window-level listeners
+    // specifically so this still works.
+    const onReorder = vi.fn()
+    const { container } = render(
+      <Secondary onReorder={onReorder}>
+        <ChildProbe key="a" label="a" expanded={10} collapsed={5} />
+        <ChildProbe key="b" label="b" expanded={10} collapsed={5} />
+        <ChildProbe key="c" label="c" expanded={10} collapsed={5} />
+      </Secondary>,
+    )
+
+    const a = itemWrapper(container, 'a')
+    fireEvent.pointerDown(a, { clientX: 50, pointerId: 1, buttons: 1 })
+    fireEvent.pointerMove(a, { clientX: 160, pointerId: 1, buttons: 1 })
+    expect(a.style.opacity).toBe('0.5')
+
+    // Release somewhere entirely unrelated to any item.
+    fireEvent.pointerUp(document.body, { pointerId: 1 })
+
+    expect(onReorder).toHaveBeenCalledWith(['b', 'a', 'c'])
+    expect(a.style.opacity).toBe('1')
+  })
+
   it('shows a live preview order during the drag, before pointerup', () => {
     const { container } = render(
       <Secondary onReorder={vi.fn()}>

@@ -252,12 +252,27 @@ rather than waiting for the caller's next render. This needs a stable
 key per child to be meaningful; children without an explicit `key` fall
 back to their index, which isn't a meaningful drag target.
 
-A missing `pointerup` is handled the same way described in Resize: a
-stray `pointermove` with no button held commits the live preview as if
-it were a real release, so a lost end event can't leave an item stuck
-mid-drag. A genuine `pointercancel` instead reverts to the caller's
-actual order without calling `onReorder`, since that's an aborted
-gesture rather than an intentional drop.
+Unlike Resize, reordering doesn't use per-element pointer capture at all
+— it tracks the drag with `pointermove`/`pointerup`/`pointercancel`
+listeners on `window` instead, added on pointerdown and removed once the
+drag ends. This isn't a style choice: reordering moves the dragged item's
+own DOM node to a new sibling position on every step (that's how the live
+preview works), and moving a node that holds native pointer capture makes
+the browser silently drop that capture mid-drag. Once capture is gone,
+the eventual release gets routed by ordinary hit-testing to whatever's
+actually under the cursor rather than the item that started the drag —
+which could be a different item, or nothing at all — so a handler
+attached only to that item never sees it, and the drag looks permanently
+stuck (dimmed, and still reorderable on the next hover). Listening on
+`window` sidesteps this: delivery no longer depends on which element is
+under the cursor or where the dragged node currently sits in the tree.
+
+A missing `pointerup` is additionally handled the same way described in
+Resize, as a last-resort backstop: a stray `pointermove` with no button
+held commits the live preview as if it were a real release. A genuine
+`pointercancel` reverts to the caller's actual order without calling
+`onReorder`, since that's an aborted gesture rather than an intentional
+drop.
 
 ## Animation speed
 
