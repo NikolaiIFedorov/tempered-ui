@@ -13,6 +13,22 @@ groups) — a Primary's own footprint is always a function of its content and
 its enclosing Secondary's collapse state, never something the user drags
 independently.
 
+A Primary that takes parameters (an Extrude button with a depth) isn't a
+third component kind — it's a resizable nested Secondary containing the
+button plus one Input per parameter, with the params conditionally
+rendered only while that Secondary is expanded (Input's own collapsed
+form still keeps its field visible, which is right for a value the user
+set on purpose but wrong for a parameter meant to stay hidden until
+revealed). Nesting the params inside the button's own box, rather than
+placing them beside it as a sibling, is what makes expanding read as
+"this button's own detail" instead of an unrelated adjacent control, and
+gives each parameterized action its own independent expand state even
+when several sit in the same toolbar. This is ordinary composition of
+existing primitives, not a new mechanism — a parameter schema declared
+next to a callback (not reflection over the callback itself, which can't
+recover a type, range, or label to generate a real control from) is
+enough to build it entirely in application code.
+
 ## Layer
 
 `layer` is not a style knob set per component — it is the nesting depth of
