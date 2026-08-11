@@ -51,6 +51,12 @@ has padding derives its corner radius directly from that same computed
 padding value (`radius = padding * 0.5`), so rounding scales with layer
 depth for free instead of needing to be kept in sync separately.
 
+Any element that carries both its own padding and a `width`/`maxWidth`
+constraint (Secondary's flex row) needs `box-sizing: border-box` — with
+the CSS default (`content-box`), a percentage `maxWidth` caps the content
+area only, so padding still renders on top of that cap and the real
+border box ends up padding-sized past the intended limit.
+
 ## Color
 
 OKLCH lightness (`L`) is already perceptually uniform by construction, unlike

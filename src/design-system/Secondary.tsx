@@ -248,6 +248,12 @@ export function Secondary({
         // user has explicitly dragged this Secondary wider/narrower.
         width: !selfMeasures && owned.isOverridden ? owned.size : 'fit-content',
         maxWidth: '100%',
+        // Its own padding must count toward width/maxWidth, not sit outside
+        // them — with the default content-box, a maxWidth: 100% cap still
+        // lets padding push the real rendered box past the available space
+        // by exactly the padding amount, since content-box percentages
+        // ignore padding entirely.
+        boxSizing: 'border-box',
         gap: computeSize(layer, GAP_SCALE),
         padding,
         borderRadius: padding * RADIUS_RATIO,
