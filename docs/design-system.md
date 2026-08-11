@@ -191,6 +191,22 @@ actual layout (with its own subpixel rounding) don't perfectly agree, so
 a drag aimed at "fully expanded" would land just under the threshold and
 stay collapsed no matter how far out it was dragged.
 
+## Reposition
+
+An `onReorder` Secondary makes its direct children draggable to reorder
+them among their siblings. It's controlled, the same way a controlled
+`<input>` reports changes instead of owning its value: Secondary handles
+the drag gesture and gives live visual feedback, but the actual order
+lives wherever the caller's data already lives — `onReorder(newKeyOrder)`
+fires on release, and Secondary doesn't mutate anything on its own.
+
+While dragging, each pointer move compares the pointer's position along
+the layout axis against every other item's live midpoint and splices the
+dragged key to that slot — giving an instant preview during the drag
+rather than waiting for the caller's next render. This needs a stable
+key per child to be meaningful; children without an explicit `key` fall
+back to their index, which isn't a meaningful drag target.
+
 ## Animation speed
 
 ```
