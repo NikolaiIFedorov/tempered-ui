@@ -147,6 +147,7 @@ function AppContent() {
           gridTemplateRows: 'auto 1fr',
           gridTemplateAreas: `"files tools misc" "files tools canvas"`,
           gap: 12,
+          padding: 12,
           pointerEvents: 'none',
         }}
       >
