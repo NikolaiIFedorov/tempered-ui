@@ -8,10 +8,10 @@ where the component type has a meaningful icon; icon-less types (paragraph,
 plain label) omit it rather than forcing a placeholder. **Secondary**
 components are containers: they arrange a list of Primary components, or nest
 another Secondary component. Secondary components are the only unit that can
-be hidden or reordered by the user (panels, toolbars, docked groups). Resizing
-isn't exclusively a Secondary capability — see Resize below — but every
-component that supports it (Secondary itself, Input's field) owns its size the
-same uniform way.
+be hidden, reordered, or resized by the user (panels, toolbars, docked
+groups) — a Primary's own footprint is always a function of its content and
+its enclosing Secondary's collapse state, never something the user drags
+independently.
 
 ## Layer
 
@@ -175,24 +175,17 @@ needs the analytical icon/ellipsis-based formula.
 
 ## Resize
 
-Size is owned locally by whichever component has it, the same
+Only a Secondary is user-resizable — a Primary's size always follows from
+its content and its enclosing Secondary's collapse state, never from its
+own drag handle. A Secondary's own size is owned locally, the same
 broadcast-and-locally-own pattern `layer`/`direction`/`collapsed` already
-use — not something a parent computes or holds the pixel value for on a
-child's behalf. `useOwnedSize(defaultSize, { axis, min, enabled })` is the
-one primitive behind every resizable dimension: it holds an optional
-local override (`null` until the user drags), exposes `size` (`override ??
+use for everything else — not something a parent computes or holds the
+pixel value for on a child's behalf. `useOwnedSize(defaultSize, { axis,
+min, enabled })` is the primitive behind it: it holds an optional local
+override (`null` until the user drags), exposes `size` (`override ??
 defaultSize`), and returns ready-to-spread pointer handlers for a drag
-handle. Any component that wants to be user-resizable uses this the same
-way, rather than growing its own bespoke drag state.
-
-`resizable` on a Secondary does two things: it grants *itself* a drag
-handle, and it broadcasts that same permission downward via
-`ResizableContext`/`useResizable()` so its Primary children can render
-their own handles without the app having to set a `resizable` prop on
-each one individually. Not every Primary consumes it — a Button's size is
-purely a function of its content (icon + label), with nothing independent
-to negotiate beyond collapse, which already exists — but Input's field
-does, since a wider or narrower text box is a real, common affordance.
+handle. `resizable` on a Secondary grants it a drag handle; it doesn't
+broadcast anything downward, since no Primary needs the capability.
 
 **Root Secondary (`layer 0`, `direction="row"`).** Its `useOwnedSize` ref
 attaches to the same measurement wrapper `ResizeObserver` already watches,
@@ -219,14 +212,6 @@ because *it* was dragged narrow, or because its ancestor was, whichever
 comes first. This OR is safe here in a way it isn't for self-measurement:
 the size came from direct pointer input, not from a box measuring its own
 rendered size, so there's no self-referential trap.
-
-**Input's field.** Independent resize, unrelated to the label-prefix's
-collapse — the field's width is `useOwnedSize` gated by `useResizable()`,
-floored at the field's own `minSize`. Its handle's width counts toward
-Input's registered footprint on the row axis only; the field never enters
-a column-direction Secondary's height footprint, since Input's internal
-layout (prefix beside field) is always row regardless of its enclosing
-Secondary's direction.
 
 A resize handle nested inside an ancestor's own drag surface — e.g. a
 resizable nested Secondary's handle sitting inside the root's reorderable

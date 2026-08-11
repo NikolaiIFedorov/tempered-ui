@@ -1,12 +1,11 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useCollapsed, useLayer, useResizable, useSecondaryDirection } from './layer'
+import { useCollapsed, useLayer, useSecondaryDirection } from './layer'
 import { computeCollapsedContentWidth, PrimaryContent } from './PrimaryContent'
 import { useMinSizeRegistration } from './registry'
 import { computeInkColor, toCssColor } from './theme'
 import { useTheme } from './ThemeProvider'
 import { computeSize } from './tokens'
-import { useOwnedSize } from './useOwnedSize'
 
 export interface InputProps {
   icon?: ReactNode
@@ -21,13 +20,11 @@ const FIELD_WIDTH_SCALE = { baseSize: 96, shrinkRatio: 0.85, minSize: 48 }
 const GAP_SCALE = { baseSize: 8, shrinkRatio: 0.85, minSize: 4 }
 const PADDING_SCALE = { baseSize: 6, shrinkRatio: 0.6, minSize: 2 }
 const RADIUS_RATIO = 0.5
-const HANDLE_WIDTH = 6
 
 export function Input({ icon, label, value, onChange, placeholder, disabled }: InputProps) {
   const layer = useLayer()
   const collapsed = useCollapsed()
   const direction = useSecondaryDirection()
-  const resizable = useResizable()
   const theme = useTheme()
   const gap = computeSize(layer, GAP_SCALE)
   const padding = computeSize(layer, PADDING_SCALE)
@@ -35,17 +32,7 @@ export function Input({ icon, label, value, onChange, placeholder, disabled }: I
   const labelRef = useRef<HTMLLabelElement>(null)
   const [expandedSize, setExpandedSize] = useState<number | null>(null)
 
-  // The field's own width — owned locally like everything else, defaulting
-  // to the token-computed value until the user drags its own handle. The
-  // field's width is independent of the enclosing Secondary's direction:
-  // Input's internal layout (prefix beside field) is always row, so this
-  // only ever resizes along x.
-  const ownedField = useOwnedSize<HTMLInputElement>(computeSize(layer, FIELD_WIDTH_SCALE), {
-    axis: 'x',
-    min: FIELD_WIDTH_SCALE.minSize,
-    enabled: resizable,
-  })
-  const fieldWidth = ownedField.size
+  const fieldWidth = computeSize(layer, FIELD_WIDTH_SCALE)
 
   useLayoutEffect(() => {
     if (collapsed) return
@@ -70,10 +57,9 @@ export function Input({ icon, label, value, onChange, placeholder, disabled }: I
   // Collapsing only ever hides the prefix label horizontally — it never
   // changes Input's height — so along the column/height axis the collapsed
   // footprint is just the same measured size as expanded.
-  const handleTotal = resizable ? HANDLE_WIDTH : 0
   const collapsedSize =
     direction === 'row'
-      ? computeCollapsedContentWidth(layer, Boolean(icon)) + gap + fieldWidth + handleTotal
+      ? computeCollapsedContentWidth(layer, Boolean(icon)) + gap + fieldWidth
       : (expandedSize ?? 0)
 
   // border-box makes the input's real rendered width exactly fieldWidth
@@ -83,8 +69,7 @@ export function Input({ icon, label, value, onChange, placeholder, disabled }: I
     expandedSize === null
       ? null
       : {
-          expanded:
-            direction === 'row' ? expandedSize + gap + fieldWidth + handleTotal : expandedSize,
+          expanded: direction === 'row' ? expandedSize + gap + fieldWidth : expandedSize,
           collapsed: collapsedSize,
         },
   )
@@ -109,38 +94,22 @@ export function Input({ icon, label, value, onChange, placeholder, disabled }: I
       <span ref={prefixRef} style={{ display: 'inline-flex', alignItems: 'center' }}>
         <PrimaryContent icon={icon} label={label} />
       </span>
-      <span style={{ display: 'inline-flex', alignItems: 'stretch' }}>
-        <input
-          ref={ownedField.ref}
-          type="text"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
-          disabled={disabled}
-          style={{
-            width: fieldWidth,
-            padding,
-            borderRadius: padding * RADIUS_RATIO,
-            boxSizing: 'border-box',
-            border: 'none',
-            backgroundColor: toCssColor(fieldBackground),
-            color: toCssColor(fieldInk),
-          }}
-        />
-        {ownedField.handleProps ? (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            {...ownedField.handleProps}
-            style={{
-              flexShrink: 0,
-              width: HANDLE_WIDTH,
-              cursor: 'col-resize',
-              touchAction: 'none',
-            }}
-          />
-        ) : null}
-      </span>
+      <input
+        type="text"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        style={{
+          width: fieldWidth,
+          padding,
+          borderRadius: padding * RADIUS_RATIO,
+          boxSizing: 'border-box',
+          border: 'none',
+          backgroundColor: toCssColor(fieldBackground),
+          color: toCssColor(fieldInk),
+        }}
+      />
     </label>
   )
 }

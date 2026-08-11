@@ -4,11 +4,9 @@ import {
   CollapseProvider,
   DirectionProvider,
   LayerProvider,
-  ResizableProvider,
   useCollapsed,
   useLayer,
   useOwnSecondaryLayer,
-  useResizable,
   useSecondaryDirection,
 } from './layer'
 
@@ -105,26 +103,5 @@ describe('direction propagation', () => {
       </DirectionProvider>,
     )
     expect(screen.getByTestId('direction')).toHaveTextContent('column')
-  })
-})
-
-function ResizableProbe() {
-  const resizable = useResizable()
-  return <div data-testid="resizable">{String(resizable)}</div>
-}
-
-describe('resizable capability propagation', () => {
-  it('defaults to false — a Primary is not resizable unless granted', () => {
-    render(<ResizableProbe />)
-    expect(screen.getByTestId('resizable')).toHaveTextContent('false')
-  })
-
-  it('reflects the nearest enclosing Secondary granting it', () => {
-    render(
-      <ResizableProvider value={true}>
-        <ResizableProbe />
-      </ResizableProvider>,
-    )
-    expect(screen.getByTestId('resizable')).toHaveTextContent('true')
   })
 })

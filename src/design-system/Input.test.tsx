@@ -2,7 +2,6 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { act } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Input } from './Input'
-import { ResizableProvider } from './layer'
 import { MinSizeRegistryProvider } from './registry'
 import { Secondary } from './Secondary'
 import { FakeResizeObserver } from './test-utils/fakeResizeObserver'
@@ -86,67 +85,5 @@ describe('Input inside a Secondary that collapses', () => {
     expect(screen.getByTestId('icon')).toBeInTheDocument()
     expect(screen.getByDisplayValue('42')).toBeInTheDocument()
     expect(screen.getByDisplayValue('42')).not.toBeDisabled()
-  })
-})
-
-describe('Input field resize', () => {
-  beforeEach(() => {
-    HTMLElement.prototype.setPointerCapture = vi.fn()
-    HTMLElement.prototype.hasPointerCapture = vi.fn(() => true)
-    HTMLElement.prototype.releasePointerCapture = vi.fn()
-  })
-
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
-  it('renders no handle when resizing is not granted by an enclosing Secondary', () => {
-    render(<Input icon={<svg />} label="Width" value="42" onChange={() => {}} />)
-    expect(screen.queryByRole('separator')).not.toBeInTheDocument()
-  })
-
-  it('renders a handle when an enclosing Secondary grants resizing', () => {
-    render(
-      <ResizableProvider value={true}>
-        <Input icon={<svg />} label="Width" value="42" onChange={() => {}} />
-      </ResizableProvider>,
-    )
-    expect(screen.getByRole('separator')).toBeInTheDocument()
-  })
-
-  it("widens the field when its own handle is dragged, independent of the enclosing Secondary's direction", () => {
-    render(
-      <ResizableProvider value={true}>
-        <Input icon={<svg />} label="Width" value="42" onChange={() => {}} />
-      </ResizableProvider>,
-    )
-
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-      width: 96,
-    } as DOMRect)
-
-    const handle = screen.getByRole('separator')
-    fireEvent.pointerDown(handle, { clientX: 0, pointerId: 1 })
-    fireEvent.pointerMove(handle, { clientX: 40, pointerId: 1 })
-
-    expect(screen.getByDisplayValue('42')).toHaveStyle({ width: '136px' })
-  })
-
-  it('clamps the field width at its own minSize floor', () => {
-    render(
-      <ResizableProvider value={true}>
-        <Input icon={<svg />} label="Width" value="42" onChange={() => {}} />
-      </ResizableProvider>,
-    )
-
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-      width: 96,
-    } as DOMRect)
-
-    const handle = screen.getByRole('separator')
-    fireEvent.pointerDown(handle, { clientX: 0, pointerId: 1 })
-    fireEvent.pointerMove(handle, { clientX: -100000, pointerId: 1 })
-
-    expect(screen.getByDisplayValue('42')).toHaveStyle({ width: '48px' })
   })
 })

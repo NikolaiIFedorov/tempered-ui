@@ -4,7 +4,6 @@ import {
   CollapseProvider,
   DirectionProvider,
   LayerProvider,
-  ResizableProvider,
   useCollapsed,
   useOwnSecondaryLayer,
 } from './layer'
@@ -17,10 +16,8 @@ import { useOwnedSize } from './useOwnedSize'
 export interface SecondaryProps {
   direction?: 'row' | 'column'
   hidden?: boolean
-  // Grants resize permission to this Secondary itself, and broadcasts that
-  // same permission down to its Primary children (they still each own
-  // their own size locally via useOwnedSize; this only says they're
-  // allowed to).
+  // Only Secondary components are user-resizable — grants this Secondary
+  // itself a drag handle. Primary children never resize independently.
   resizable?: boolean
   // Reordering is a controlled operation, the same way a controlled
   // <input> reports changes instead of owning its own value: Secondary
@@ -303,30 +300,28 @@ export function Secondary({
     <LayerProvider value={layer}>
       <CollapseProvider value={collapsed}>
         <DirectionProvider value={direction}>
-          <ResizableProvider value={resizable}>
-            <MinSizeRegistryProvider value={registry}>
-              {selfMeasures ? (
-                // The measured box must always reflect the true available
-                // space, never its own content — fit-content on it directly
-                // would make it hug whatever's currently rendered (including
-                // the collapsed version), making ResizeObserver read its own
-                // collapse decision back as "not enough room" and get stuck.
-                // This invisible width: 100% wrapper is what's measured; the
-                // fit-content, visually-styled row lives inside it, unmeasured.
-                // A drag sets an explicit width instead of 100% — maxWidth
-                // still applies, so a real viewport shrink below the dragged
-                // width still wins and gets measured correctly.
-                <div
-                  ref={owned.ref}
-                  style={{ width: owned.isOverridden ? owned.size : '100%', maxWidth: '100%' }}
-                >
-                  {flexRow}
-                </div>
-              ) : (
-                flexRow
-              )}
-            </MinSizeRegistryProvider>
-          </ResizableProvider>
+          <MinSizeRegistryProvider value={registry}>
+            {selfMeasures ? (
+              // The measured box must always reflect the true available
+              // space, never its own content — fit-content on it directly
+              // would make it hug whatever's currently rendered (including
+              // the collapsed version), making ResizeObserver read its own
+              // collapse decision back as "not enough room" and get stuck.
+              // This invisible width: 100% wrapper is what's measured; the
+              // fit-content, visually-styled row lives inside it, unmeasured.
+              // A drag sets an explicit width instead of 100% — maxWidth
+              // still applies, so a real viewport shrink below the dragged
+              // width still wins and gets measured correctly.
+              <div
+                ref={owned.ref}
+                style={{ width: owned.isOverridden ? owned.size : '100%', maxWidth: '100%' }}
+              >
+                {flexRow}
+              </div>
+            ) : (
+              flexRow
+            )}
+          </MinSizeRegistryProvider>
         </DirectionProvider>
       </CollapseProvider>
     </LayerProvider>
