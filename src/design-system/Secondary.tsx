@@ -16,6 +16,12 @@ export interface SecondaryProps {
   direction?: 'row' | 'column'
   hidden?: boolean
   resizable?: boolean
+  // Reordering is a controlled operation, the same way a controlled
+  // <input> reports changes instead of owning its own value: Secondary
+  // handles the drag gesture and live visual feedback, but the actual
+  // list order lives wherever the caller's data already lives. Omit to
+  // leave children un-draggable.
+  onReorder?: (newOrder: string[]) => void
   children: ReactNode
   style?: CSSProperties
   className?: string
@@ -32,6 +38,7 @@ export function Secondary({
   direction = 'row',
   hidden = false,
   resizable = false,
+  onReorder,
   children,
   style,
   className,
@@ -70,6 +77,15 @@ export function Secondary({
   const [dragWidth, setDragWidth] = useState<number | null>(null)
   const requiredRef = useRef({ expanded: 0, collapsed: 0 })
   const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(null)
+
+  // Reordering: dragOrder is the live preview order while actively
+  // dragging (null the rest of the time, meaning "render children in
+  // their natural prop order"). itemRefs lets the drag handler measure
+  // every sibling's current position to figure out where the dragged item
+  // should land.
+  const itemRefs = useRef(new Map<string, HTMLDivElement>())
+  const [dragOrder, setDragOrder] = useState<string[] | null>(null)
+  const reorderStateRef = useRef<{ key: string; order: string[] } | null>(null)
 
   const recompute = useCallback(
     (availableSize: number) => {
@@ -176,11 +192,73 @@ export function Secondary({
     }
   }, [])
 
+  const handleItemPointerDown = useCallback(
+    (key: string, naturalOrder: string[]) => (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!onReorder) return
+      event.currentTarget.setPointerCapture(event.pointerId)
+      reorderStateRef.current = { key, order: naturalOrder }
+      setDragOrder(naturalOrder)
+    },
+    [onReorder],
+  )
+
+  const handleItemPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const state = reorderStateRef.current
+      if (!state) return
+      const pointerPos = direction === 'row' ? event.clientX : event.clientY
+      const order = [...state.order]
+      const draggedIndex = order.indexOf(state.key)
+      let targetIndex = draggedIndex
+
+      order.forEach((key, index) => {
+        if (key === state.key) return
+        const el = itemRefs.current.get(key)
+        if (!el) return
+        const rect = el.getBoundingClientRect()
+        const mid =
+          direction === 'row' ? (rect.left + rect.right) / 2 : (rect.top + rect.bottom) / 2
+        if (pointerPos > mid && index > targetIndex) targetIndex = index
+        if (pointerPos < mid && index < targetIndex) targetIndex = index
+      })
+
+      if (targetIndex !== draggedIndex) {
+        order.splice(draggedIndex, 1)
+        order.splice(targetIndex, 0, state.key)
+        reorderStateRef.current = { key: state.key, order }
+        setDragOrder(order)
+      }
+    },
+    [direction],
+  )
+
+  const handleItemPointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const state = reorderStateRef.current
+      reorderStateRef.current = null
+      setDragOrder(null)
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
+      if (state) onReorder?.(state.order)
+    },
+    [onReorder],
+  )
+
   if (hidden) return null
 
   const background = theme.resolveBase(layer)
   const ink = computeInkColor(background)
   const padding = computeSize(layer, PADDING_SCALE)
+
+  const keyedChildren = new Map<string, ReactNode>()
+  const naturalOrder: string[] = []
+  Children.forEach(children, (child, index) => {
+    const key = isValidElement(child) && child.key !== null ? String(child.key) : String(index)
+    keyedChildren.set(key, child)
+    naturalOrder.push(key)
+  })
+  const renderOrder = dragOrder ?? naturalOrder
 
   const flexRow = (
     <div
@@ -203,12 +281,25 @@ export function Secondary({
         ...style,
       }}
     >
-      {Children.map(children, (child, index) => (
+      {renderOrder.map((key) => (
         <div
-          key={isValidElement(child) && child.key !== null ? child.key : index}
-          style={{ flexShrink: 0 }}
+          key={key}
+          data-key={key}
+          ref={(el) => {
+            if (el) itemRefs.current.set(key, el)
+            else itemRefs.current.delete(key)
+          }}
+          onPointerDown={onReorder ? handleItemPointerDown(key, naturalOrder) : undefined}
+          onPointerMove={onReorder ? handleItemPointerMove : undefined}
+          onPointerUp={onReorder ? handleItemPointerUp : undefined}
+          style={{
+            flexShrink: 0,
+            cursor: onReorder ? 'grab' : undefined,
+            opacity: reorderStateRef.current?.key === key ? 0.5 : 1,
+            touchAction: onReorder ? 'none' : undefined,
+          }}
         >
-          {child}
+          {keyedChildren.get(key)}
         </div>
       ))}
       {resizable && selfMeasures ? (

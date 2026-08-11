@@ -70,8 +70,32 @@ function ExtrudeIcon() {
   )
 }
 
+function renderToolbarItem(key: string, width: string, setWidth: (value: string) => void) {
+  switch (key) {
+    case 'save':
+      return (
+        <Button key={key} icon={<SaveIcon />} label="Save" onClick={() => console.log('save')} />
+      )
+    case 'cancel':
+      return <Button key={key} icon={<CancelIcon />} label="Cancel" />
+    case 'width':
+      return (
+        <Input key={key} icon={<WidthIcon />} label="Width" value={width} onChange={setWidth} />
+      )
+    case 'extrude':
+      return (
+        <Secondary key={key}>
+          <Button icon={<ExtrudeIcon />} label="Extrude" />
+        </Secondary>
+      )
+    default:
+      return null
+  }
+}
+
 function AppContent() {
   const [width, setWidth] = useState('42')
+  const [order, setOrder] = useState(['save', 'cancel', 'width', 'extrude'])
   const theme = useTheme()
 
   return (
@@ -85,17 +109,12 @@ function AppContent() {
     >
       <Secondary direction="column">
         <Paragraph>
-          Design-system demo — shrink the window to see the toolbar collapse to icons, then scroll
-          once it can't collapse any further.
+          Design-system demo — shrink the window to see the toolbar collapse to icons, drag the
+          handle on the right edge to resize it, and drag items to reorder them.
         </Paragraph>
       </Secondary>
-      <Secondary resizable style={{ marginTop: 12 }}>
-        <Button icon={<SaveIcon />} label="Save" onClick={() => console.log('save')} />
-        <Button icon={<CancelIcon />} label="Cancel" />
-        <Input icon={<WidthIcon />} label="Width" value={width} onChange={setWidth} />
-        <Secondary>
-          <Button icon={<ExtrudeIcon />} label="Extrude" />
-        </Secondary>
+      <Secondary resizable onReorder={setOrder} style={{ marginTop: 12 }}>
+        {order.map((key) => renderToolbarItem(key, width, setWidth))}
       </Secondary>
     </div>
   )

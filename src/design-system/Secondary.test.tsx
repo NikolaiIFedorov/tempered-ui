@@ -373,3 +373,102 @@ describe('drag-to-resize', () => {
     expect(parseFloat((container.firstChild as HTMLElement).style.width)).toBeGreaterThan(200)
   })
 })
+
+describe('drag-to-reorder', () => {
+  // Lays out three items left-to-right: a=[0,100], b=[100,200], c=[200,300].
+  const RECTS: Record<string, { left: number; right: number; top: number; bottom: number }> = {
+    a: { left: 0, right: 100, top: 0, bottom: 40 },
+    b: { left: 100, right: 200, top: 0, bottom: 40 },
+    c: { left: 200, right: 300, top: 0, bottom: 40 },
+  }
+
+  beforeEach(() => {
+    HTMLElement.prototype.setPointerCapture = vi.fn()
+    HTMLElement.prototype.hasPointerCapture = vi.fn(() => true)
+    HTMLElement.prototype.releasePointerCapture = vi.fn()
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const key = this.getAttribute('data-key')
+      const rect = key ? RECTS[key] : undefined
+      return {
+        width: 100,
+        height: 40,
+        ...(rect ?? { left: 0, right: 0, top: 0, bottom: 0 }),
+      } as DOMRect
+    })
+  })
+
+  function itemWrapper(container: HTMLElement, key: string) {
+    return container.querySelector(`[data-key="${key}"]`) as HTMLElement
+  }
+
+  it('does not attach drag handlers when onReorder is not provided', () => {
+    const { container } = render(
+      <Secondary>
+        <ChildProbe key="a" label="a" expanded={10} collapsed={5} />
+        <ChildProbe key="b" label="b" expanded={10} collapsed={5} />
+      </Secondary>,
+    )
+    const a = itemWrapper(container, 'a')
+    expect(a.style.cursor).toBe('')
+    fireEvent.pointerDown(a, { clientX: 50, pointerId: 1 })
+    fireEvent.pointerMove(a, { clientX: 160, pointerId: 1 })
+    fireEvent.pointerUp(a, { pointerId: 1 })
+    // Nothing should have moved — order in the DOM stays natural.
+    expect(screen.getAllByTestId(/[abc]/).map((el) => el.dataset.testid)).toEqual(['a', 'b'])
+  })
+
+  it('reorders past a sibling once dragged beyond its midpoint, and reports the new order on release', () => {
+    const onReorder = vi.fn()
+    const { container } = render(
+      <Secondary onReorder={onReorder}>
+        <ChildProbe key="a" label="a" expanded={10} collapsed={5} />
+        <ChildProbe key="b" label="b" expanded={10} collapsed={5} />
+        <ChildProbe key="c" label="c" expanded={10} collapsed={5} />
+      </Secondary>,
+    )
+
+    const a = itemWrapper(container, 'a')
+    fireEvent.pointerDown(a, { clientX: 50, pointerId: 1 })
+    // b's midpoint is at x=150; 160 is past it.
+    fireEvent.pointerMove(a, { clientX: 160, pointerId: 1 })
+    fireEvent.pointerUp(a, { pointerId: 1 })
+
+    expect(onReorder).toHaveBeenCalledWith(['b', 'a', 'c'])
+  })
+
+  it('shows a live preview order during the drag, before pointerup', () => {
+    const { container } = render(
+      <Secondary onReorder={vi.fn()}>
+        <ChildProbe key="a" label="a" expanded={10} collapsed={5} />
+        <ChildProbe key="b" label="b" expanded={10} collapsed={5} />
+        <ChildProbe key="c" label="c" expanded={10} collapsed={5} />
+      </Secondary>,
+    )
+
+    const a = itemWrapper(container, 'a')
+    fireEvent.pointerDown(a, { clientX: 50, pointerId: 1 })
+    fireEvent.pointerMove(a, { clientX: 160, pointerId: 1 })
+
+    const order = screen.getAllByTestId(/[abc]/).map((el) => el.dataset.testid)
+    expect(order).toEqual(['b', 'a', 'c'])
+  })
+
+  it('does not reorder when dragged only slightly, staying within the same slot', () => {
+    const onReorder = vi.fn()
+    const { container } = render(
+      <Secondary onReorder={onReorder}>
+        <ChildProbe key="a" label="a" expanded={10} collapsed={5} />
+        <ChildProbe key="b" label="b" expanded={10} collapsed={5} />
+      </Secondary>,
+    )
+
+    const a = itemWrapper(container, 'a')
+    fireEvent.pointerDown(a, { clientX: 50, pointerId: 1 })
+    fireEvent.pointerMove(a, { clientX: 55, pointerId: 1 })
+    fireEvent.pointerUp(a, { pointerId: 1 })
+
+    expect(onReorder).toHaveBeenCalledWith(['a', 'b'])
+  })
+})
