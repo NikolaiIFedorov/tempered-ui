@@ -4,6 +4,7 @@ import { Button } from './design-system/Button'
 import { Secondary } from './design-system/Secondary'
 import { toCssColor } from './design-system/theme'
 import { ThemeProvider, useTheme } from './design-system/ThemeProvider'
+import { SettingsPanel } from './SettingsPanel'
 
 // No width/height here — PrimaryContent's .primary-icon wrapper sizes
 // this to 1em (matching text height) regardless of what any consumer's
@@ -97,15 +98,6 @@ function XRayIcon() {
   )
 }
 
-function SettingsIcon() {
-  return (
-    <Icon>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.35a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.65 15a1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.65 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.65a1.7 1.7 0 0 0 1.04-1.56V3a2 2 0 0 1 4 0v.09A1.7 1.7 0 0 0 15 4.65a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.35 9a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 0 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15Z" />
-    </Icon>
-  )
-}
-
 interface Tool {
   key: string
   icon: ReactNode
@@ -162,13 +154,7 @@ function AppContent() {
           <Button icon={<SaveIcon />} label="Save" onClick={() => console.log('save')} />
         </Secondary>
 
-        <Secondary direction="column" style={{ gridArea: 'settings', height: '100%' }}>
-          <Button
-            icon={<SettingsIcon />}
-            label="Settings"
-            onClick={() => console.log('settings')}
-          />
-        </Secondary>
+        <SettingsPanel style={{ gridArea: 'settings' }} />
 
         <Secondary direction="column" style={{ gridArea: 'tools', height: '100%' }}>
           {TOOLS.map((tool) => (
