@@ -6,6 +6,7 @@ import { useMinSizeRegistration } from './registry'
 import { computeInkColor, toCssColor } from './theme'
 import { useTheme } from './ThemeProvider'
 import { computeSize } from './tokens'
+import { useTokens } from './TokensProvider'
 
 export interface ButtonProps {
   icon?: ReactNode
@@ -14,27 +15,31 @@ export interface ButtonProps {
   disabled?: boolean
 }
 
-const PADDING_SCALE = { baseSize: 12, shrinkRatio: 0.6, minSize: 4 }
-const RADIUS_RATIO = 0.5
-
 export function Button({ icon, label, onClick, disabled }: ButtonProps) {
   const layer = useLayer()
   const collapsed = useCollapsed()
   const direction = useSecondaryDirection()
   const theme = useTheme()
+  const tokens = useTokens()
+  const { buttonPadding: PADDING_SCALE, buttonRadiusRatio: RADIUS_RATIO } = tokens
   const padding = computeSize(layer, PADDING_SCALE)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const [expandedSize, setExpandedSize] = useState<number | null>(null)
 
   // Measuring the real <button> (not just PrimaryContent's inner span)
   // means padding/border are captured automatically, whatever they are —
-  // no need to separately track "chrome" this component adds.
+  // no need to separately track "chrome" this component adds. tokens (the
+  // whole object, not just buttonPadding) is in deps so a live Settings
+  // edit re-measures and re-registers rather than only re-painting — this
+  // stays correct even for indirect effects (e.g. PrimaryContent's own
+  // gap token changing this button's rendered width) without needing to
+  // track every token that could possibly affect it individually.
   useLayoutEffect(() => {
     if (collapsed || !buttonRef.current) return
     const rect = buttonRef.current.getBoundingClientRect()
     const size = direction === 'row' ? rect.width : rect.height
     setExpandedSize((previous) => (previous === size ? previous : size))
-  }, [collapsed, icon, label, direction])
+  }, [collapsed, icon, label, direction, tokens])
 
   useMinSizeRegistration(expandedSize === null ? null : { expanded: expandedSize })
 

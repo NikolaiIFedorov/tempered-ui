@@ -11,6 +11,7 @@ import { type MinSizeEntry, MinSizeRegistryProvider, useMinSizeRegistration } fr
 import { computeInkColor, toCssColor } from './theme'
 import { useTheme } from './ThemeProvider'
 import { computeSize } from './tokens'
+import { useTokens } from './TokensProvider'
 
 export interface SecondaryProps {
   direction?: 'row' | 'column'
@@ -26,12 +27,6 @@ export interface SecondaryProps {
   className?: string
 }
 
-const GAP_SCALE = { baseSize: 8, shrinkRatio: 0.85, minSize: 2 }
-const PADDING_SCALE = { baseSize: 12, shrinkRatio: 0.6, minSize: 4 }
-// Fillets (border-radius) aren't a token of their own — they're derived
-// straight from padding, scaling proportionally with it for free.
-const RADIUS_RATIO = 0.5
-
 export function Secondary({
   direction = 'row',
   hidden = false,
@@ -43,6 +38,11 @@ export function Secondary({
   const layer = useOwnSecondaryLayer()
   const ancestorCollapsed = useCollapsed()
   const theme = useTheme()
+  const {
+    secondaryGap: GAP_SCALE,
+    secondaryPadding: PADDING_SCALE,
+    secondaryRadiusRatio: RADIUS_RATIO,
+  } = useTokens()
   // A Secondary nested inside another Secondary is always wrapped in
   // flexShrink: 0 by its parent, so its own box can never actually be
   // squeezed by row layout — only the root (no ancestor Secondary) has a
@@ -96,7 +96,7 @@ export function Secondary({
         setOwnCollapsed(availableSize < requiredExpanded)
       }
     },
-    [layer, selfMeasures],
+    [layer, selfMeasures, GAP_SCALE, PADDING_SCALE],
   )
 
   // Reports this Secondary's own aggregate footprint to its ancestor's
@@ -118,6 +118,14 @@ export function Secondary({
     }),
     [recompute],
   )
+
+  // recompute only ever runs in reaction to a registration event or a real
+  // ResizeObserver reading — neither fires just because gap/padding
+  // changed (e.g. a live Settings edit), so this re-runs it directly
+  // whenever recompute's own identity changes for that reason.
+  useEffect(() => {
+    recompute(lastAvailableSize.current)
+  }, [recompute])
 
   useEffect(() => {
     if (!selfMeasures) return

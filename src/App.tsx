@@ -4,6 +4,7 @@ import { Button } from './design-system/Button'
 import { Secondary } from './design-system/Secondary'
 import { toCssColor } from './design-system/theme'
 import { ThemeProvider, useTheme } from './design-system/ThemeProvider'
+import { TokensProvider } from './design-system/TokensProvider'
 import { SettingsPanel } from './SettingsPanel'
 
 // No width/height here — PrimaryContent's .primary-icon wrapper sizes
@@ -198,7 +199,9 @@ function AppContent() {
 function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <TokensProvider>
+        <AppContent />
+      </TokensProvider>
     </ThemeProvider>
   )
 }

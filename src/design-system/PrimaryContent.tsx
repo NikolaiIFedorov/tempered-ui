@@ -1,14 +1,13 @@
 import type { ReactNode } from 'react'
 import { useCollapsed, useLayer } from './layer'
 import { computeSize } from './tokens'
+import { useTokens } from './TokensProvider'
 
 export interface PrimaryContentProps {
   icon?: ReactNode
   label: string
 }
 
-const GAP_SCALE = { baseSize: 6, shrinkRatio: 0.85, minSize: 2 }
-const ELLIPSIS_WIDTH = 24
 // 1em ties the icon directly to whatever font-size is actually active in
 // context (Button/Input's inherited default, Paragraph's own layer-scaled
 // size, ...) rather than tracking it separately — the icon is always
@@ -19,6 +18,7 @@ const ICON_SIZE = '1em'
 export function PrimaryContent({ icon, label }: PrimaryContentProps) {
   const layer = useLayer()
   const collapsed = useCollapsed()
+  const { primaryContentGap: GAP_SCALE, primaryContentEllipsisWidth: ELLIPSIS_WIDTH } = useTokens()
 
   if (collapsed) {
     if (icon) {

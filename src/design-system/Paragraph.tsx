@@ -5,28 +5,31 @@ import { useMinSizeRegistration } from './registry'
 import { computeInkColor, toCssColor } from './theme'
 import { useTheme } from './ThemeProvider'
 import { computeSize } from './tokens'
+import { useTokens } from './TokensProvider'
 
 export interface ParagraphProps {
   children: string
 }
-
-const FONT_SIZE_SCALE = { baseSize: 14, shrinkRatio: 0.9, minSize: 10 }
 
 export function Paragraph({ children }: ParagraphProps) {
   const layer = useLayer()
   const collapsed = useCollapsed()
   const direction = useSecondaryDirection()
   const theme = useTheme()
-  const fontSize = computeSize(layer, FONT_SIZE_SCALE)
+  const tokens = useTokens()
+  const fontSize = computeSize(layer, tokens.paragraphFontSize)
   const paragraphRef = useRef<HTMLParagraphElement>(null)
   const [expandedSize, setExpandedSize] = useState<number | null>(null)
 
+  // tokens in deps (not just fontSize) for the same reason as Button/Input
+  // — a live Settings edit re-measures correctly, including indirect
+  // effects, not just the direct paragraphFontSize case.
   useLayoutEffect(() => {
     if (collapsed || !paragraphRef.current) return
     const rect = paragraphRef.current.getBoundingClientRect()
     const size = direction === 'row' ? rect.width : rect.height
     setExpandedSize((previous) => (previous === size ? previous : size))
-  }, [collapsed, children, direction])
+  }, [collapsed, children, direction, tokens])
 
   useMinSizeRegistration(expandedSize === null ? null : { expanded: expandedSize })
 

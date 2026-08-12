@@ -1,9 +1,11 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCollapsed } from './layer'
 import { useMinSizeRegistration } from './registry'
 import { Secondary } from './Secondary'
 import { FakeResizeObserver } from './test-utils/fakeResizeObserver'
+import { TokensProvider, useSetTokens } from './TokensProvider'
 
 function ChildProbe({ label, expanded }: { label: string; expanded: number }) {
   useMinSizeRegistration({ expanded })
@@ -18,6 +20,57 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+function TokenEditor({ children }: { children: ReactNode }) {
+  const setTokens = useSetTokens()
+  return (
+    <div>
+      <button
+        onClick={() =>
+          setTokens((previous) => ({
+            ...previous,
+            secondaryPadding: { ...previous.secondaryPadding, baseSize: 500 },
+          }))
+        }
+      >
+        grow padding
+      </button>
+      {children}
+    </div>
+  )
+}
+
+describe('Secondary reacts to live token changes', () => {
+  // recompute only used to run in reaction to a registration event or a
+  // real ResizeObserver reading — a token changing alone (e.g. a live
+  // Settings edit) wasn't either of those, so without re-running it
+  // explicitly when the token itself changes, the collapse threshold
+  // would silently go stale until something unrelated happened to
+  // trigger a recompute anyway.
+  it('re-derives its collapse threshold when a token changes, without any new registration or resize event', () => {
+    render(
+      <TokensProvider>
+        <TokenEditor>
+          <Secondary>
+            <ChildProbe label="a" expanded={50} />
+          </Secondary>
+        </TokenEditor>
+      </TokensProvider>,
+    )
+
+    const observer = FakeResizeObserver.instances[0]
+    act(() => {
+      observer.trigger({ width: 200, height: 40 })
+    })
+    expect(screen.getByTestId('a')).toHaveTextContent('false')
+
+    act(() => {
+      fireEvent.click(screen.getByText('grow padding'))
+    })
+
+    expect(screen.getByTestId('a')).toHaveTextContent('true')
+  })
 })
 
 describe('Secondary collapse', () => {

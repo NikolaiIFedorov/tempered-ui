@@ -269,6 +269,42 @@ situations can all cause the end event itself to go missing. A genuine
 `onReorder`, since that's an aborted gesture rather than an intentional
 drop.
 
+## Live tokens
+
+Every tunable constant across the design system — each component's own
+`SizeScale` objects (`baseSize`/`shrinkRatio`/`minSize`), radius ratios,
+the color roles (`baseRole`/`accentRole`), and `Lstep` — lives in exactly
+one place: `TokensProvider`/`useTokens()` for size, `ThemeProvider`/
+`useTheme()` (already the home of color) for color. No component keeps
+its own hardcoded copy; each reads its scale from `useTokens()` (or
+`useTheme()` for color) on every render, the same way every other
+context-driven value already works. A settings surface that reads and
+writes through the same hooks is editing the real, live value everything
+else renders from — not a separate snapshot that would need syncing back.
+
+Both providers default to real, current values outside a provider —
+`DEFAULT_TOKENS` for size, the previous hardcoded color roles for
+theme — consistent with every other design-system hook, with a no-op
+setter where there's no state to update.
+
+A token changing doesn't automatically make every dependent number
+correct on its own: values read directly in JSX (`padding`, `gap`,
+`fontSize`, ...) update for free on the next render, but a component that
+also *measures itself* to register a min-size (Button, Input, Paragraph)
+or *recomputes* an aggregate footprint (Secondary) does that in an
+imperative effect that only used to run in reaction to a registration
+event or a real `ResizeObserver` reading — neither of which fires just
+because a token changed. Each of those effects now also depends on the
+token(s) involved (Secondary's `recompute` re-runs directly whenever its
+own identity changes for this reason), so a live edit re-measures and
+re-registers rather than silently drifting out of sync until something
+unrelated happens to trigger it anyway. Where a component's measurement
+could plausibly be affected by a token it doesn't own directly (e.g.
+`PrimaryContent`'s own gap changing a Button's rendered width), the
+measuring effect depends on the whole `tokens` object rather than trying
+to enumerate every indirect case — over-triggering a cheap re-measurement
+is a safe trade for not chasing indirect dependencies one by one.
+
 ## Animation speed
 
 ```
