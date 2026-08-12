@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { act } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Button } from './Button'
+import { DirectionProvider } from './layer'
 import { MinSizeRegistryProvider } from './registry'
 import { Secondary } from './Secondary'
 import { FakeResizeObserver } from './test-utils/fakeResizeObserver'
@@ -22,6 +23,25 @@ describe('Button', () => {
   it('is disabled when disabled is set', () => {
     render(<Button label="Save" disabled />)
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+})
+
+describe('Button width in a column-direction Secondary', () => {
+  it('stretches to fill its column (matching the widest sibling) when direction is column', () => {
+    render(
+      <DirectionProvider value="column">
+        <Button label="Save" />
+      </DirectionProvider>,
+    )
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveStyle({
+      width: '100%',
+      boxSizing: 'border-box',
+    })
+  })
+
+  it('does not stretch in the default row direction, since its cross axis is height there', () => {
+    render(<Button label="Save" />)
+    expect(screen.getByRole('button', { name: 'Save' }).style.width).toBe('')
   })
 })
 

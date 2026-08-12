@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { act } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Input } from './Input'
+import { DirectionProvider } from './layer'
 import { MinSizeRegistryProvider } from './registry'
 import { Secondary } from './Secondary'
 import { FakeResizeObserver } from './test-utils/fakeResizeObserver'
@@ -23,6 +24,26 @@ describe('Input', () => {
   it('is disabled when disabled is set', () => {
     render(<Input icon={<svg />} label="Width" value="42" onChange={() => {}} disabled />)
     expect(screen.getByDisplayValue('42')).toBeDisabled()
+  })
+})
+
+describe('Input width in a column-direction Secondary', () => {
+  it('stretches the field (not the label) to fill its column when direction is column', () => {
+    render(
+      <DirectionProvider value="column">
+        <Input icon={<svg />} label="Width" value="42" onChange={() => {}} />
+      </DirectionProvider>,
+    )
+    const label = screen.getByDisplayValue('42').closest('label')!
+    expect(label).toHaveStyle({ width: '100%' })
+    expect(screen.getByDisplayValue('42')).toHaveStyle({ flexGrow: '1' })
+  })
+
+  it('does not stretch in the default row direction, since its cross axis is height there', () => {
+    render(<Input icon={<svg />} label="Width" value="42" onChange={() => {}} />)
+    const label = screen.getByDisplayValue('42').closest('label')!
+    expect(label.style.width).toBe('')
+    expect(screen.getByDisplayValue('42').style.flexGrow).toBe('')
   })
 })
 

@@ -78,9 +78,14 @@ export function Input({ icon, label, value, onChange, placeholder, disabled }: I
         alignItems: 'center',
         gap,
         color: toCssColor(prefixInk),
+        // See Button for why this is needed at all: a column-direction
+        // Secondary's items stretch to the widest sibling by default
+        // (align-items: stretch), but an inline-flex box won't fill that
+        // stretched space on its own.
+        width: direction === 'column' ? '100%' : undefined,
       }}
     >
-      <span ref={prefixRef} style={{ display: 'inline-flex', alignItems: 'center' }}>
+      <span ref={prefixRef} style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
         <PrimaryContent icon={icon} label={label} />
       </span>
       <input
@@ -91,6 +96,11 @@ export function Input({ icon, label, value, onChange, placeholder, disabled }: I
         disabled={disabled}
         style={{
           width: fieldWidth,
+          // fieldWidth is the floor (and the row-direction, non-stretched
+          // size) — flexGrow lets the field itself be "the part that gets
+          // wider" when there's extra room, rather than the label growing
+          // or a gap opening up between label and field.
+          flexGrow: direction === 'column' ? 1 : undefined,
           padding,
           borderRadius: padding * RADIUS_RATIO,
           boxSizing: 'border-box',

@@ -51,6 +51,17 @@ export function Button({ icon, label, onClick, disabled }: ButtonProps) {
       onClick={onClick}
       disabled={disabled}
       style={{
+        // A column-direction Secondary's items stretch to the width of
+        // whichever sibling is widest by default (ordinary flexbox
+        // align-items: stretch) — but a <button> is an inline-level box
+        // that won't actually fill that stretched space on its own unless
+        // told to. Row-direction toolbars are unaffected: their cross axis
+        // is height, which this doesn't touch.
+        width: direction === 'column' ? '100%' : undefined,
+        // Needed the moment width is explicit — otherwise padding renders
+        // outside the 100% box instead of inside it, the same overflow
+        // Secondary's own row hit earlier for the same reason.
+        boxSizing: 'border-box',
         padding,
         borderRadius: padding * RADIUS_RATIO,
         border: 'none',

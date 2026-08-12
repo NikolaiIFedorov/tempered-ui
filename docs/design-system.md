@@ -197,6 +197,22 @@ ever registered per Primary (its expanded size along that axis) — there's
 no separate collapsed size to track, since the collapse threshold is only
 ever compared against the expanded requirement in the first place.
 
+A `direction="column"` Secondary's children stretch to match whichever
+sibling is widest — ordinary flexbox `align-items: stretch` along the
+cross axis, ostensibly free, except Button's `<button>` and Input's outer
+`<label>` are inline-level boxes that don't actually fill a stretched
+parent on their own. Both set `width: 100%` (plus `box-sizing: border-box`
+so padding doesn't push them past it) specifically when `direction ===
+"column"` — a `direction="row"` toolbar's cross axis is height, not
+width, so this never applies there, and nothing about a row's appearance
+changes. For Input specifically, the field is "the part that gets wider,"
+not the label or the gap between them: the field's own `flexGrow: 1` (its
+`width` stays as the floor/flex-basis) lets it grow into whatever space
+stretching opens up, while the label keeps its natural content width via
+`flexShrink: 0` — landing every field's left edge at a consistent column
+and its right edge flush with the container, rather than the label
+stretching or a gap opening up between label and field.
+
 A self-measuring root's split into an outer measurement wrapper and an
 inner, visually-styled row is an implementation detail a caller should
 never need to know about: `className`/`style` are applied to whichever of
