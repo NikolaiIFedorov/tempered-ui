@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Button } from './design-system/Button'
 import { Secondary } from './design-system/Secondary'
@@ -112,9 +112,31 @@ const TOOLS: Tool[] = [
   { key: 'move', icon: <MoveIcon />, label: 'Move' },
 ]
 
+// Files/misc are row-direction roots, so they already self-measure and
+// collapse independently — but tools/settings are column-direction roots,
+// which deliberately never self-measure at all (a column's height has no
+// real external constraint in ordinary page flow, so doing so would be
+// self-referential). Left alone, that means only two of the four bars can
+// ever respond to the window narrowing. Rather than have each bar decide
+// independently anyway (which would look inconsistent even for the two
+// that can), one shared width breakpoint decides for the whole set, so
+// they collapse and expand together.
+const NARROW_BREAKPOINT = 900
+
+function useIsNarrow(breakpoint: number): boolean {
+  const [isNarrow, setIsNarrow] = useState(() => window.innerWidth < breakpoint)
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < breakpoint)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [breakpoint])
+  return isNarrow
+}
+
 function AppContent() {
   const [activeTool, setActiveTool] = useState<Tool | null>(TOOLS[0]!)
   const theme = useTheme()
+  const isNarrow = useIsNarrow(NARROW_BREAKPOINT)
 
   return (
     <div
@@ -149,15 +171,19 @@ function AppContent() {
           pointerEvents: 'none',
         }}
       >
-        <Secondary style={{ gridArea: 'files' }}>
+        <Secondary forceCollapsed={isNarrow} style={{ gridArea: 'files' }}>
           <Button icon={<NewIcon />} label="New" onClick={() => console.log('new')} />
           <Button icon={<OpenIcon />} label="Open" onClick={() => console.log('open')} />
           <Button icon={<SaveIcon />} label="Save" onClick={() => console.log('save')} />
         </Secondary>
 
-        <SettingsPanel style={{ gridArea: 'settings' }} />
+        <SettingsPanel forceCollapsed={isNarrow} style={{ gridArea: 'settings' }} />
 
-        <Secondary direction="column" style={{ gridArea: 'tools', height: '100%' }}>
+        <Secondary
+          direction="column"
+          forceCollapsed={isNarrow}
+          style={{ gridArea: 'tools', height: '100%' }}
+        >
           {TOOLS.map((tool) => (
             <Button
               key={tool.key}
@@ -168,7 +194,7 @@ function AppContent() {
           ))}
         </Secondary>
 
-        <Secondary style={{ gridArea: 'misc' }}>
+        <Secondary forceCollapsed={isNarrow} style={{ gridArea: 'misc' }}>
           <Button
             icon={<AnalysisIcon />}
             label="Analysis"
@@ -187,7 +213,7 @@ function AppContent() {
           // own list, it doesn't do free 2D placement, and desktop
           // position doesn't actually matter here (touch enforces top-left
           // as the reachable corner regardless).
-          <Secondary style={{ gridArea: 'canvas' }}>
+          <Secondary forceCollapsed={isNarrow} style={{ gridArea: 'canvas' }}>
             <Button icon={activeTool.icon} label={activeTool.label} />
           </Secondary>
         ) : null}

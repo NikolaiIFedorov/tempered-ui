@@ -6,6 +6,7 @@ import {
   LayerProvider,
   useCollapsed,
   useOwnSecondaryLayer,
+  useSecondaryDirection,
 } from './layer'
 import { type MinSizeEntry, MinSizeRegistryProvider, useMinSizeRegistration } from './registry'
 import { computeInkColor, toCssColor } from './theme'
@@ -16,6 +17,16 @@ import { useTokens } from './TokensProvider'
 export interface SecondaryProps {
   direction?: 'row' | 'column'
   hidden?: boolean
+  // An explicit override, ORed into the collapse decision this Secondary
+  // would otherwise reach on its own (self-measurement for a row root,
+  // ancestor cascade otherwise). Exists because several independent root
+  // Secondaries can't coordinate a shared "not enough room overall"
+  // decision purely from each one's own measurement — a column-direction
+  // root in particular never self-measures at all (see below), so without
+  // this it has no way to collapse in response to anything. A caller that
+  // wants a set of independent bars to collapse together computes that
+  // signal itself and passes it to each of them.
+  forceCollapsed?: boolean
   // Reordering is a controlled operation, the same way a controlled
   // <input> reports changes instead of owning its own value: Secondary
   // handles the drag gesture and live visual feedback, but the actual
@@ -30,6 +41,7 @@ export interface SecondaryProps {
 export function Secondary({
   direction = 'row',
   hidden = false,
+  forceCollapsed = false,
   onReorder,
   children,
   style,
@@ -37,6 +49,11 @@ export function Secondary({
 }: SecondaryProps) {
   const layer = useOwnSecondaryLayer()
   const ancestorCollapsed = useCollapsed()
+  // Read *before* this Secondary provides its own DirectionProvider below
+  // — this is the direction its own enclosing Secondary declared for its
+  // children (row default at the root), the same ambient value Button and
+  // Input read to know whether to stretch.
+  const parentDirection = useSecondaryDirection()
   const theme = useTheme()
   const {
     secondaryGap: GAP_SCALE,
@@ -142,7 +159,7 @@ export function Secondary({
     return () => observer.disconnect()
   }, [recompute, selfMeasures])
 
-  const collapsed = selfMeasures ? ownCollapsed : ancestorCollapsed
+  const collapsed = (selfMeasures ? ownCollapsed : ancestorCollapsed) || forceCollapsed
 
   // Reordering visibly moves the dragged item's DOM node to a new sibling
   // position on every step — and moving a node that holds native pointer
@@ -252,10 +269,13 @@ export function Secondary({
       style={{
         display: 'flex',
         flexDirection: direction,
-        // Hugs its content's width instead of filling its parent (matching
-        // what a toolbar should look like), but still clamps down to the
-        // parent's real available space when that's smaller.
-        width: 'fit-content',
+        // Hugs its content's width instead of filling its parent by
+        // default (matching what a toolbar should look like) — except a
+        // self-measuring root has no parent stretch to speak of, and a
+        // Secondary nested inside a column-direction parent stretches to
+        // match its widest sibling the same way Button/Input do, rather
+        // than each section sizing to its own content independently.
+        width: !selfMeasures && parentDirection === 'column' ? '100%' : 'fit-content',
         maxWidth: '100%',
         // Its own padding must count toward width/maxWidth, not sit outside
         // them — with the default content-box, a maxWidth: 100% cap still

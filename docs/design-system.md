@@ -199,19 +199,42 @@ ever compared against the expanded requirement in the first place.
 
 A `direction="column"` Secondary's children stretch to match whichever
 sibling is widest — ordinary flexbox `align-items: stretch` along the
-cross axis, ostensibly free, except Button's `<button>` and Input's outer
-`<label>` are inline-level boxes that don't actually fill a stretched
-parent on their own. Both set `width: 100%` (plus `box-sizing: border-box`
-so padding doesn't push them past it) specifically when `direction ===
-"column"` — a `direction="row"` toolbar's cross axis is height, not
-width, so this never applies there, and nothing about a row's appearance
-changes. For Input specifically, the field is "the part that gets wider,"
-not the label or the gap between them: the field's own `flexGrow: 1` (its
-`width` stays as the floor/flex-basis) lets it grow into whatever space
-stretching opens up, while the label keeps its natural content width via
-`flexShrink: 0` — landing every field's left edge at a consistent column
-and its right edge flush with the container, rather than the label
-stretching or a gap opening up between label and field.
+cross axis, ostensibly free, except Button's `<button>`, Input's outer
+`<label>`, and Secondary's own row are all inline-level (or explicitly
+`fit-content`-sized) boxes that don't actually fill a stretched parent on
+their own. All three set `width: 100%` (plus `box-sizing: border-box` so
+padding doesn't push them past it) specifically when the *enclosing*
+Secondary's direction is `"column"` — a `direction="row"` toolbar's cross
+axis is height, not width, so this never applies there, and nothing about
+a row's appearance changes. Secondary reads this via `useSecondaryDirection()`
+*before* providing its own `DirectionProvider` for its children, the same
+ambient "what does my parent use" read Button/Input already do — a
+self-measuring root has no parent stretch to speak of, so it's excluded
+regardless of what that read returns. This is how nested sections (each
+its own Secondary) end up a uniform width instead of each sizing to its
+own content independently. For Input specifically, the field is "the part
+that gets wider," not the label or the gap between them: the field's own
+`flexGrow: 1` (its `width` stays as the floor/flex-basis) lets it grow
+into whatever space stretching opens up, while the label keeps its
+natural content width via `flexShrink: 0` — landing every field's left
+edge at a consistent column and its right edge flush with the container,
+rather than the label stretching or a gap opening up between label and
+field.
+
+Several independent root Secondaries (e.g. separate toolbars/panels
+positioned around a page shell, not nested inside one common container)
+can't coordinate a shared "not enough room overall" decision purely from
+each one's own measurement — and a `direction="column"` root in
+particular never self-measures at all, so left alone it has no way to
+collapse in response to anything. `forceCollapsed` is an explicit
+override, ORed into whatever collapse decision a Secondary would
+otherwise reach on its own, for a caller that wants a set of these
+independent roots to collapse and expand together: it computes one
+shared signal itself (e.g. a single window-width breakpoint) and passes
+it to each of them. Passing it only to each independent root is enough —
+a nested Secondary still cascades collapse from `ancestorCollapsed` the
+same way it always has, so a `forceCollapsed` root's descendants collapse
+too without needing the prop threaded down to each of them individually.
 
 A self-measuring root's split into an outer measurement wrapper and an
 inner, visually-styled row is an implementation detail a caller should

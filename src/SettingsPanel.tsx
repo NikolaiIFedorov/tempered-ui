@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Input } from './design-system/Input'
 import type { ColorRole } from './design-system/theme'
@@ -76,10 +77,23 @@ function numberField(
 // ThemeProvider/TokensProvider state every design-system component itself
 // reads from — editing here is editing the real, live value, not a
 // separate snapshot.
-export function SettingsPanel({ style }: { style?: CSSProperties }) {
+export function SettingsPanel({
+  style,
+  forceCollapsed,
+}: {
+  style?: CSSProperties
+  forceCollapsed?: boolean
+}) {
   const theme = useTheme()
   const tokens = useTokens()
   const setTokens = useSetTokens()
+  // What's actually displayed while typing. A field's "real" value is
+  // always derived by round-tripping through Number() -> String(), which
+  // strips anything not yet a complete number ("0." becomes "0", stripping
+  // the trailing dot mid-keystroke) — making it impossible to ever type a
+  // decimal. This holds the user's literal input instead; onChange below
+  // still only commits to the real token when it parses.
+  const [rawValues, setRawValues] = useState<Record<string, string>>({})
 
   const sections: SettingsSection[] = [
     {
@@ -152,7 +166,11 @@ export function SettingsPanel({ style }: { style?: CSSProperties }) {
   ]
 
   return (
-    <Secondary direction="column" style={{ height: '100%', ...style }}>
+    <Secondary
+      direction="column"
+      forceCollapsed={forceCollapsed}
+      style={{ height: '100%', ...style }}
+    >
       <Paragraph>Settings</Paragraph>
       {sections.map((section) => (
         <Secondary key={section.title} direction="column">
@@ -161,8 +179,11 @@ export function SettingsPanel({ style }: { style?: CSSProperties }) {
             <Input
               key={field.key}
               label={field.label}
-              value={field.value}
-              onChange={field.onChange}
+              value={rawValues[field.key] ?? field.value}
+              onChange={(raw) => {
+                setRawValues((previous) => ({ ...previous, [field.key]: raw }))
+                field.onChange(raw)
+              }}
             />
           ))}
         </Secondary>

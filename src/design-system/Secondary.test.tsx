@@ -73,6 +73,40 @@ describe('Secondary reacts to live token changes', () => {
   })
 })
 
+describe('Secondary forceCollapsed', () => {
+  it('collapses a column-direction root even though it never self-measures on its own', () => {
+    render(
+      <Secondary direction="column" forceCollapsed>
+        <ChildProbe label="a" expanded={50} />
+      </Secondary>,
+    )
+    expect(screen.getByTestId('a')).toHaveTextContent('true')
+  })
+
+  it('collapses a row-direction root before any real measurement would', () => {
+    render(
+      <Secondary forceCollapsed>
+        <ChildProbe label="a" expanded={50} />
+      </Secondary>,
+    )
+    expect(screen.getByTestId('a')).toHaveTextContent('true')
+  })
+
+  it('ORs with (never overrides away) a collapse the Secondary would already reach on its own', () => {
+    const { container } = render(
+      <Secondary forceCollapsed={false}>
+        <ChildProbe label="a" expanded={50} />
+      </Secondary>,
+    )
+    const observer = FakeResizeObserver.instances[0]
+    act(() => {
+      observer.trigger({ width: 10, height: 40 })
+    })
+    expect(screen.getByTestId('a')).toHaveTextContent('true')
+    expect(container).toBeInTheDocument()
+  })
+})
+
 describe('Secondary collapse', () => {
   it("stays expanded while available space covers the sum of children's expanded min sizes", () => {
     render(
