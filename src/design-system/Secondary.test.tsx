@@ -105,6 +105,31 @@ describe('Secondary forceCollapsed', () => {
     expect(screen.getByTestId('a')).toHaveTextContent('true')
     expect(container).toBeInTheDocument()
   })
+
+  it('does not attach a ResizeObserver on a row-direction root when selfMeasure is false', () => {
+    render(
+      <Secondary selfMeasure={false}>
+        <ChildProbe label="a" expanded={50} />
+      </Secondary>,
+    )
+    expect(FakeResizeObserver.instances).toHaveLength(0)
+  })
+
+  it('relies purely on forceCollapsed for a row-direction root with selfMeasure disabled, so it cannot flip independently of siblings driven by the same shared signal', () => {
+    const { rerender } = render(
+      <Secondary selfMeasure={false} forceCollapsed={false}>
+        <ChildProbe label="a" expanded={50} />
+      </Secondary>,
+    )
+    expect(screen.getByTestId('a')).toHaveTextContent('false')
+
+    rerender(
+      <Secondary selfMeasure={false} forceCollapsed={true}>
+        <ChildProbe label="a" expanded={50} />
+      </Secondary>,
+    )
+    expect(screen.getByTestId('a')).toHaveTextContent('true')
+  })
 })
 
 describe('Secondary collapse', () => {

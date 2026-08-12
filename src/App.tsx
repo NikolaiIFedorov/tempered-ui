@@ -177,7 +177,7 @@ function AppContent() {
           pointerEvents: 'none',
         }}
       >
-        <Secondary forceCollapsed={isNarrow} style={{ gridArea: 'files' }}>
+        <Secondary forceCollapsed={isNarrow} selfMeasure={false} style={{ gridArea: 'files' }}>
           <Button icon={<NewIcon />} label="New" onClick={() => console.log('new')} />
           <Button icon={<OpenIcon />} label="Open" onClick={() => console.log('open')} />
           <Button icon={<SaveIcon />} label="Save" onClick={() => console.log('save')} />
@@ -200,7 +200,7 @@ function AppContent() {
           ))}
         </Secondary>
 
-        <Secondary forceCollapsed={isNarrow} style={{ gridArea: 'misc' }}>
+        <Secondary forceCollapsed={isNarrow} selfMeasure={false} style={{ gridArea: 'misc' }}>
           <Button
             icon={<AnalysisIcon />}
             label="Analysis"
@@ -219,7 +219,7 @@ function AppContent() {
           // own list, it doesn't do free 2D placement, and desktop
           // position doesn't actually matter here (touch enforces top-left
           // as the reachable corner regardless).
-          <Secondary forceCollapsed={isNarrow} style={{ gridArea: 'canvas' }}>
+          <Secondary forceCollapsed={isNarrow} selfMeasure={false} style={{ gridArea: 'canvas' }}>
             <Button icon={activeTool.icon} label={activeTool.label} />
           </Secondary>
         ) : null}

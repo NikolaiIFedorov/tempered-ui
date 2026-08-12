@@ -244,6 +244,20 @@ a nested Secondary still cascades collapse from `ancestorCollapsed` the
 same way it always has, so a `forceCollapsed` root's descendants collapse
 too without needing the prop threaded down to each of them individually.
 
+A `direction="row"` root that's part of such a shared-signal set should
+also get `selfMeasure={false}`. Left at its default, a row root keeps
+running its own independent `ResizeObserver`-driven collapse decision
+*alongside* `forceCollapsed` (the two OR together) — usually harmless, but
+wrong when several roots are meant to flip in lockstep off one breakpoint:
+a root that happens to sit in a flexible layout track (e.g. a CSS grid
+column sized `1fr`) has its own measured width shrink at a different rate
+than the window itself, so it can cross its own threshold before or after
+its siblings cross the shared one, producing a staggered collapse even
+though every root received the same `forceCollapsed` value. Setting
+`selfMeasure={false}` drops a row root's own measurement entirely, so
+`forceCollapsed` becomes its sole source of truth — the same footing a
+`direction="column"` root already has by construction.
+
 A self-measuring root's split into an outer measurement wrapper and an
 inner, visually-styled row is an implementation detail a caller should
 never need to know about: `className`/`style` are applied to whichever of

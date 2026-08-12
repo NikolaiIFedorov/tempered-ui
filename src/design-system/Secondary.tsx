@@ -27,6 +27,18 @@ export interface SecondaryProps {
   // wants a set of independent bars to collapse together computes that
   // signal itself and passes it to each of them.
   forceCollapsed?: boolean
+  // A row-direction root normally self-measures independently (see
+  // `selfMeasures` below) — fine on its own, but when a caller is already
+  // driving a set of roots off one shared `forceCollapsed` signal, letting
+  // a row root *also* keep its own independent ResizeObserver reading
+  // means it can flip collapsed at a different width than its siblings
+  // (e.g. one sitting in a flexible grid track that narrows faster than
+  // the window itself), producing a staggered, non-uniform collapse even
+  // though every root received the same forceCollapsed value. Set false to
+  // disable a row root's own measurement and rely purely on forceCollapsed,
+  // the same way a column root (which never self-measures at all) already
+  // does.
+  selfMeasure?: boolean
   // Reordering is a controlled operation, the same way a controlled
   // <input> reports changes instead of owning its own value: Secondary
   // handles the drag gesture and live visual feedback, but the actual
@@ -42,6 +54,7 @@ export function Secondary({
   direction = 'row',
   hidden = false,
   forceCollapsed = false,
+  selfMeasure = true,
   onReorder,
   children,
   style,
@@ -74,7 +87,7 @@ export function Secondary({
   // Secondary's measurement wrapper would just hug its own content's
   // height, making "available vs. required" self-referential — any one
   // bad reading during a fast resize can permanently stick it collapsed.
-  const selfMeasures = isRoot && direction === 'row'
+  const selfMeasures = isRoot && direction === 'row' && selfMeasure
   const entries = useRef(new Map<string, MinSizeEntry>())
   const lastAvailableSize = useRef(0)
   const hasMeasured = useRef(false)
