@@ -5,16 +5,12 @@ import { Secondary } from './design-system/Secondary'
 import { toCssColor } from './design-system/theme'
 import { ThemeProvider, useTheme } from './design-system/ThemeProvider'
 
+// No width/height here — PrimaryContent's .primary-icon wrapper sizes
+// this to 1em (matching text height) regardless of what any consumer's
+// icon declares on itself.
 function Icon({ children }: { children: ReactNode }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      width="20"
-      height="20"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       {children}
     </svg>
   )

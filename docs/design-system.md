@@ -37,9 +37,24 @@ size(layer) = baseSize * shrinkRatio^layer
 `shrinkRatio` is not one shared constant — it's tuned per token. Padding
 uses `0.6` (a deliberately fast shrink, so nesting depth reads as an
 obvious step rather than something you have to look closely to notice);
-gap, icon size, and font size use a gentler `0.85`, since those need to
-stay legible/usable rather than dramatically shrink. All of them share
-the same equation shape, just calibrated differently per token.
+gap and font size use a gentler `0.85`, since those need to stay
+legible/usable rather than dramatically shrink. All of them share the
+same equation shape, just calibrated differently per token.
+
+An icon isn't sized by its own token at all — `PrimaryContent` sizes its
+icon wrapper to `1em`, tying it directly to whatever font-size is
+actually active in context (a Primary's inherited default, Paragraph's
+own layer-scaled size, ...) rather than tracking it separately. This
+also keeps it square, since both dimensions use the same value. The
+wrapper needs an explicit `display` (`inline-block`, not the default
+`inline`) for this to work at all — a plain inline element ignores
+`width`/`height` entirely, silently discarding the `1em` sizing and
+leaving the icon's own `width: 100%` (set via a `.primary-icon > svg`
+CSS rule, so it fills the wrapper regardless of whatever width/height an
+individual icon's own SVG declares) with no real box to resolve
+against — a real bug hit live as a giant, wrongly-scaled icon in
+collapsed mode specifically, where this wrapper renders as the outermost
+element rather than getting free blockification as a flex item.
 
 Each size token has a `minSize` floor independent of the equation above — the
 point past which the token stops shrinking and instead triggers collapse

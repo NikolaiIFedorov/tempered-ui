@@ -7,19 +7,32 @@ export interface PrimaryContentProps {
   label: string
 }
 
-const ICON_SCALE = { baseSize: 20, shrinkRatio: 0.85, minSize: 12 }
 const GAP_SCALE = { baseSize: 6, shrinkRatio: 0.85, minSize: 2 }
 const ELLIPSIS_WIDTH = 24
+// 1em ties the icon directly to whatever font-size is actually active in
+// context (Button/Input's inherited default, Paragraph's own layer-scaled
+// size, ...) rather than tracking it separately — the icon is always
+// exactly as tall as the text next to it, and square since both
+// dimensions use the same value.
+const ICON_SIZE = '1em'
 
 export function PrimaryContent({ icon, label }: PrimaryContentProps) {
   const layer = useLayer()
   const collapsed = useCollapsed()
-  const iconSize = computeSize(layer, ICON_SCALE)
 
   if (collapsed) {
     if (icon) {
       return (
-        <span title={label} aria-label={label} style={{ width: iconSize, height: iconSize }}>
+        <span
+          title={label}
+          aria-label={label}
+          className="primary-icon"
+          // display must be explicit here — a plain (inline) span ignores
+          // width/height entirely, so the 1em sizing would silently do
+          // nothing and leave the icon's own width: 100% with no real box
+          // to resolve against.
+          style={{ display: 'inline-block', width: ICON_SIZE, height: ICON_SIZE }}
+        >
           {icon}
         </span>
       )
@@ -48,7 +61,19 @@ export function PrimaryContent({ icon, label }: PrimaryContentProps) {
         gap: computeSize(layer, GAP_SCALE),
       }}
     >
-      {icon}
+      {icon ? (
+        <span
+          className="primary-icon"
+          style={{
+            display: 'inline-block',
+            width: ICON_SIZE,
+            height: ICON_SIZE,
+            flexShrink: 0,
+          }}
+        >
+          {icon}
+        </span>
+      ) : null}
       <span>{label}</span>
     </span>
   )

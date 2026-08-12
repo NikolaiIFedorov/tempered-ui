@@ -12,3 +12,13 @@ body {
 #root {
   height: 100%;
 }
+
+/* PrimaryContent sizes its icon wrapper to 1em (matching the current text
+   height) and expects the icon itself to fill that box — an icon's own
+   width/height attributes (SVG's <svg width="20" height="20">, a common
+   default) would otherwise win over the wrapper's intended size, since
+   attributes aren't overridden by an ancestor's CSS. */
+.primary-icon > svg {
+  width: 100%;
+  height: 100%;
+}
