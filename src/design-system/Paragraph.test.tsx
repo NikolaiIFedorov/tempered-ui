@@ -1,32 +1,32 @@
 import { render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { CollapseProvider } from './layer'
 import { MinSizeRegistryProvider } from './registry'
 import { Paragraph } from './Paragraph'
 
 describe('Paragraph', () => {
-  it('renders its text inside a <p> element when expanded', () => {
+  it('renders its text inside a <p> element', () => {
     render(<Paragraph>Explains what this panel does.</Paragraph>)
     const paragraph = screen.getByText('Explains what this panel does.')
     expect(paragraph.closest('p')).toBeInTheDocument()
   })
 
-  it('falls back to a title-bearing ellipsis fragment when collapsed, since it has no icon', () => {
+  // Unlike Button/Input, Paragraph never switches to a discrete collapsed
+  // form — it has no icon to fall back to, and ordinary text wrapping
+  // already lets it use however much width it's given, so it doesn't need
+  // the same "not enough room" escape hatch collapse exists for.
+  it('keeps rendering its full text even when its ancestor Secondary is collapsed', () => {
     render(
       <CollapseProvider value={true}>
         <Paragraph>Explains what this panel does.</Paragraph>
       </CollapseProvider>,
     )
-    expect(screen.getByTitle('Explains what this panel does.')).toBeInTheDocument()
+    expect(screen.getByText('Explains what this panel does.')).toBeInTheDocument()
   })
 })
 
-describe('Paragraph min-size registration', () => {
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
-  it('registers the real <p> element width so it counts toward its Secondary collapse threshold', () => {
+describe('Paragraph does not participate in min-size registration', () => {
+  it('never registers, since it has no discrete collapsed form for a collapse threshold to protect', () => {
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       width: 200,
     } as DOMRect)
@@ -40,9 +40,6 @@ describe('Paragraph min-size registration', () => {
       </MinSizeRegistryProvider>,
     )
 
-    expect(register).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ expanded: 200 }),
-    )
+    expect(register).not.toHaveBeenCalled()
   })
 })

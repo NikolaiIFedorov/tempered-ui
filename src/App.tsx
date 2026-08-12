@@ -121,7 +121,13 @@ const TOOLS: Tool[] = [
 // independently anyway (which would look inconsistent even for the two
 // that can), one shared width breakpoint decides for the whole set, so
 // they collapse and expand together.
-const NARROW_BREAKPOINT = 900
+//
+// The number itself is measured, not guessed: settings/tools/misc sitting
+// side by side (row 2 of the grid) need ~606px at their natural expanded
+// width, the widest requirement of the four bars — files alone only needs
+// ~284px. 650 gives that a little breathing room without collapsing tens
+// or hundreds of pixels before anything would actually overlap.
+const NARROW_BREAKPOINT = 650
 
 function useIsNarrow(breakpoint: number): boolean {
   const [isNarrow, setIsNarrow] = useState(() => window.innerWidth < breakpoint)

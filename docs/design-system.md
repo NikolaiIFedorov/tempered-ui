@@ -156,9 +156,17 @@ children:
    rendering decision, not something separately registered: the threshold
    that triggered the collapse in the first place is based purely on each
    Primary's *expanded* `minSize`.
-2. A Primary with no icon (paragraph, plain label) collapses to a
-   fixed-width ellipsized fragment instead.
-3. If children still don't fit after every Primary has collapsed, the
+2. Paragraph is the one Primary that never switches to a discrete
+   collapsed form and never registers a `minSize` at all: collapsing exists
+   to reclaim space some Primary genuinely needs (an icon fallback, a
+   narrower field), but Paragraph has no icon to fall back to and no hard
+   minimum it's protecting. Ordinary text wrapping already lets it use
+   however much width it's given, so it just shrinks with its container
+   instead of truncating to an ellipsized fragment — including under a
+   `forceCollapsed` cascade from an ancestor, since the same "not the kind
+   of problem collapse solves" reasoning applies regardless of what
+   triggered the collapse.
+3. If children still don't fit after every other Primary has collapsed, the
    container falls back to scrolling along its own layout axis rather than
    clipping or hiding anything — children don't flex-shrink past their
    collapsed rendered size, so the browser overflows into a scrollbar
