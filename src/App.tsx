@@ -120,14 +120,32 @@ const TOOLS: Tool[] = [
 // ever respond to the window narrowing. Rather than have each bar decide
 // independently anyway (which would look inconsistent even for the two
 // that can), one shared width breakpoint decides for the whole set, so
-// they collapse and expand together.
+// they collapse and expand together — with selfMeasure={false} on the two
+// row-direction roots (App.tsx) so neither one keeps its own independent
+// ResizeObserver reading racing against this shared one, which is what
+// caused a staggered collapse before that was added.
 //
-// The number itself is measured, not guessed: settings/tools/misc sitting
-// side by side (row 2 of the grid) need ~606px at their natural expanded
-// width, the widest requirement of the four bars — files alone only needs
-// ~284px. 650 gives that a little breathing room without collapsing tens
-// or hundreds of pixels before anything would actually overlap.
-const NARROW_BREAKPOINT = 650
+// A tempting alternative is deriving this threshold live from each bar's
+// real rendered content instead of a hand-measured number — tried and
+// reverted. It breaks two ways: first, settings/tools are column-direction,
+// so the size they register for their own *collapse* axis is a height sum,
+// not the width this threshold actually needs — there's no existing
+// mechanism that tracks a column root's cross-axis (width) requirement at
+// all. Second, feeding any root's own *currently rendered* width into a
+// signal that also controls its siblings' widths is circular: misc's real
+// available width depends on how much room settings/tools are currently
+// taking, which is itself controlled by this same shared signal — a
+// feedback loop that can oscillate or get stuck rather than converge.
+//
+// The number here is still measured, not guessed, and rechecked against
+// what the layout actually needs (~606px for settings/tools/misc side by
+// side, the largest of the four bars' requirements) — but with a
+// deliberately generous margin on top, rather than a tight fit, since a
+// real browser's font metrics won't exactly match whatever this was last
+// measured against, and the gap between a real resize and this signal
+// catching up (a window 'resize' event reaching React one JS tick after
+// the browser already reflowed) needs real slack too.
+const NARROW_BREAKPOINT = 760
 
 function useIsNarrow(breakpoint: number): boolean {
   const [isNarrow, setIsNarrow] = useState(() => window.innerWidth < breakpoint)
@@ -210,18 +228,34 @@ function AppContent() {
         </Secondary>
 
         {activeTool ? (
-          // Default position only, achieved for free by sitting in the same
-          // grid cell as the (otherwise empty) canvas area — top-left of
-          // it, just below the misc bar. The grid's own gap already spaces
-          // it from the tools/misc bars, same as every other cell — no
-          // margin of its own needed on top of that. Free repositioning is
-          // deferred: onReorder only swaps items within one Secondary's
-          // own list, it doesn't do free 2D placement, and desktop
-          // position doesn't actually matter here (touch enforces top-left
-          // as the reachable corner regardless).
-          <Secondary forceCollapsed={isNarrow} selfMeasure={false} style={{ gridArea: 'canvas' }}>
+          // A bare Button, not a Secondary: it's a single free-floating
+          // control, not a toolbar grouping, and Button already paints its
+          // own background — wrapping it in a Secondary added a second,
+          // redundant background box around it. It also sits in the
+          // 'canvas' grid cell, which spans the entire remaining viewport
+          // (row/column both 1fr) — a Secondary placed there stretches to
+          // fill that whole cell by CSS Grid's default align-items:
+          // stretch, which is what made that second box look like an
+          // oversized empty panel rather than a compact button. Sizing
+          // this wrapper to its own content instead keeps it exactly
+          // button-sized regardless of how much free space "canvas" has.
+          // Default position only, achieved for free by sitting in the
+          // same grid cell as the (otherwise empty) canvas area — top-left
+          // of it, just below the misc bar. The grid's own gap already
+          // spaces it from the tools/misc bars, same as every other cell —
+          // no margin of its own needed on top of that. Free repositioning
+          // is deferred: desktop position doesn't actually matter here
+          // (touch enforces top-left as the reachable corner regardless).
+          <div
+            style={{
+              gridArea: 'canvas',
+              width: 'fit-content',
+              height: 'fit-content',
+              pointerEvents: 'auto',
+            }}
+          >
             <Button icon={activeTool.icon} label={activeTool.label} />
-          </Secondary>
+          </div>
         ) : null}
       </div>
     </div>
