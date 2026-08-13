@@ -79,7 +79,7 @@ describe('ThemeProvider', () => {
       </ThemeProvider>,
     )
 
-    // darkMode: baseL at layer 0 = lStep, a small positive number, not 0 or 1.
+    // darkMode: baseL at layer 0 = 2 * lStep, a small positive number, not 0 or 1.
     const baseL = Number(screen.getByTestId('base-l').textContent)
     expect(baseL).toBeGreaterThan(0)
     expect(baseL).toBeLessThan(0.5)
@@ -99,7 +99,7 @@ describe('ThemeProvider', () => {
     expect(screen.getByTestId('accent-l')).toBeInTheDocument()
   })
 
-  it('resolves the canvas to the true unclamped extreme, a full Lstep away from layer 0', () => {
+  it('resolves the canvas one lStep short of the true extreme, a full lStep away from layer 0', () => {
     const mql = fakeMediaQueryList(true)
     vi.stubGlobal('window', { matchMedia: () => mql })
     vi.stubGlobal('CSS', { supports: () => false })
@@ -110,9 +110,11 @@ describe('ThemeProvider', () => {
       </ThemeProvider>,
     )
 
-    // Dark mode: canvas is pure black (0), unaffected by lMin clamping.
-    expect(screen.getByTestId('canvas-l')).toHaveTextContent('0')
+    // Dark mode: canvas sits one lStep above true black, not at it.
+    const canvasL = Number(screen.getByTestId('canvas-l').textContent)
+    expect(canvasL).toBeGreaterThan(0)
     const baseL = Number(screen.getByTestId('base-l').textContent)
-    expect(baseL).toBeGreaterThan(0)
+    // Default lStep (see ThemeProvider's DEFAULT_L_STEP) is 0.22.
+    expect(baseL - canvasL).toBeCloseTo(0.22)
   })
 })

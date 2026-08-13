@@ -2,15 +2,18 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { act } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Input } from './Input'
-import { DirectionProvider } from './layer'
-import { MinSizeRegistryProvider } from './registry'
+import { CollapseProvider, DirectionProvider } from './layer'
+import { MinSizeRegistryProvider, NaturalWidthRegistryProvider } from './registry'
 import { Secondary } from './Secondary'
 import { FakeResizeObserver } from './test-utils/fakeResizeObserver'
 
 describe('Input', () => {
   it('shows its label and current value when expanded', () => {
     render(<Input icon={<svg />} label="Width" value="42" onChange={() => {}} />)
-    expect(screen.getByText('Width')).toBeInTheDocument()
+    // Ignores the aria-hidden natural-width probe every Input also renders
+    // now (see Input.tsx) — it always shows its label, by design, so a
+    // bare text query would otherwise match it too.
+    expect(screen.getByText('Width', { ignore: '[aria-hidden="true"] *' })).toBeInTheDocument()
     expect(screen.getByDisplayValue('42')).toBeInTheDocument()
   })
 
@@ -74,6 +77,45 @@ describe('Input min-size registration', () => {
   })
 })
 
+describe('Input natural width registration', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("registers the off-viewport probe's prefix width, not the real (currently collapsed) prefix's", () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const width = this.getAttribute('aria-hidden') === 'true' ? 50 : 5
+      return { width } as DOMRect
+    })
+
+    const register = vi.fn()
+    const unregister = vi.fn()
+
+    render(
+      <CollapseProvider value={true}>
+        <NaturalWidthRegistryProvider value={{ register, unregister }}>
+          <Input icon={<svg />} label="Width" value="42" onChange={() => {}} />
+        </NaturalWidthRegistryProvider>
+      </CollapseProvider>,
+    )
+
+    // gap = 8 (base), fieldWidth = 96 (base) — probe prefix (50) + gap (8) + field (96) = 154.
+    expect(register).toHaveBeenCalledWith(expect.any(String), 154)
+  })
+
+  it("does not clone the caller's own icon element (and its data-testid/key) into the hidden probe", () => {
+    render(
+      <NaturalWidthRegistryProvider value={{ register: vi.fn(), unregister: vi.fn() }}>
+        <Input icon={<svg data-testid="icon" />} label="Width" value="42" onChange={() => {}} />
+      </NaturalWidthRegistryProvider>,
+    )
+
+    expect(screen.getAllByTestId('icon')).toHaveLength(1)
+  })
+})
+
 describe('Input inside a Secondary that collapses', () => {
   beforeEach(() => {
     FakeResizeObserver.instances = []
@@ -90,19 +132,25 @@ describe('Input inside a Secondary that collapses', () => {
 
   it('drops the visible label but keeps the value field visible and editable', () => {
     render(
-      <Secondary>
-        <Input icon={<svg data-testid="icon" />} label="Width" value="42" onChange={() => {}} />
-      </Secondary>,
+      <Secondary
+        items={[
+          {
+            kind: 'input',
+            props: { icon: <svg data-testid="icon" />, label: 'Width', value: '42', onChange: () => {} },
+          },
+        ]}
+      />,
     )
 
-    expect(screen.getByText('Width')).toBeInTheDocument()
+    const ignoreProbe = { ignore: '[aria-hidden="true"] *' }
+    expect(screen.getByText('Width', ignoreProbe)).toBeInTheDocument()
 
     const observer = FakeResizeObserver.instances[0]
     act(() => {
       observer.trigger({ width: 10, height: 40 })
     })
 
-    expect(screen.queryByText('Width')).not.toBeInTheDocument()
+    expect(screen.queryByText('Width', ignoreProbe)).not.toBeInTheDocument()
     expect(screen.getByTestId('icon')).toBeInTheDocument()
     expect(screen.getByDisplayValue('42')).toBeInTheDocument()
     expect(screen.getByDisplayValue('42')).not.toBeDisabled()

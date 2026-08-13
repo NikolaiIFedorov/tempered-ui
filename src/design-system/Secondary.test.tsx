@@ -2,15 +2,45 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCollapsed } from './layer'
-import { useMinSizeRegistration } from './registry'
-import { Secondary } from './Secondary'
+import {
+  useMinSizeRegistration,
+  useNaturalCollapsedWidthRegistration,
+  useNaturalHeightRegistration,
+  useNaturalWidthRegistration,
+} from './registry'
+// These tests exercise Secondary's internal collapse/registration engine
+// directly via synthetic probe components (ChildProbe/NaturalWidthProbe,
+// below) rather than real Primaries — SecondaryImpl is the untyped engine
+// Secondary's public `items` API delegates to; see Secondary.tsx for why
+// app code should use Secondary instead.
+import { Secondary as PublicSecondary, SecondaryImpl as Secondary } from './Secondary'
 import { FakeResizeObserver } from './test-utils/fakeResizeObserver'
 import { TokensProvider, useSetTokens } from './TokensProvider'
 
-function ChildProbe({ label, expanded }: { label: string; expanded: number }) {
+function ChildProbe({
+  label,
+  expanded,
+  naturalHeight,
+  naturalWidth,
+  naturalCollapsedWidth,
+}: {
+  label: string
+  expanded: number
+  naturalHeight?: number
+  naturalWidth?: number
+  naturalCollapsedWidth?: number
+}) {
   useMinSizeRegistration({ expanded })
+  useNaturalHeightRegistration(naturalHeight ?? null)
+  useNaturalWidthRegistration(naturalWidth ?? null)
+  useNaturalCollapsedWidthRegistration(naturalCollapsedWidth ?? null)
   const isCollapsed = useCollapsed()
   return <div data-testid={label}>{String(isCollapsed)}</div>
+}
+
+function NaturalWidthProbe({ width }: { width: number }) {
+  useNaturalWidthRegistration(width)
+  return null
 }
 
 beforeEach(() => {
@@ -390,6 +420,82 @@ describe('nested Secondary collapse cascade', () => {
   })
 })
 
+describe('Secondary natural width aggregation', () => {
+  it('sums children natural widths plus gaps and padding for a row root', () => {
+    const onNaturalWidthChange = vi.fn()
+    render(
+      <Secondary onNaturalWidthChange={onNaturalWidthChange}>
+        <NaturalWidthProbe width={50} />
+        <NaturalWidthProbe width={30} />
+      </Secondary>,
+    )
+
+    // layer 0: gap = 8, padding = 12*2 = 24 — 50 + 30 + 8 + 24 = 112.
+    expect(onNaturalWidthChange).toHaveBeenCalledWith(112)
+  })
+
+  it("takes the max across children's natural widths (not their sum) for a column root, since they stretch to the widest one rather than stacking side by side", () => {
+    const onNaturalWidthChange = vi.fn()
+    render(
+      <Secondary direction="column" onNaturalWidthChange={onNaturalWidthChange}>
+        <NaturalWidthProbe width={50} />
+        <NaturalWidthProbe width={90} />
+      </Secondary>,
+    )
+
+    // layer 0: padding = 12*2 = 24 — max(50, 90) + 24 = 114. No gap: gaps
+    // separate stacked rows, they don't contribute to a column's width.
+    expect(onNaturalWidthChange).toHaveBeenCalledWith(114)
+  })
+
+  it("folds a nested Secondary's own aggregate natural width into its ancestor's, instead of ignoring the subtree", () => {
+    const onNaturalWidthChange = vi.fn()
+    render(
+      <Secondary onNaturalWidthChange={onNaturalWidthChange}>
+        <NaturalWidthProbe width={10} />
+        <Secondary direction="column">
+          <NaturalWidthProbe width={40} />
+          <NaturalWidthProbe width={70} />
+        </Secondary>
+      </Secondary>,
+    )
+
+    // Nested column Secondary is at layer 1, where padding has shrunk to
+    // 7.2 (12 * 0.6) — its own natural width: max(40, 70) + 2*7.2 = 84.4.
+    // Root (row, layer 0): 10 + 84.4 + gap (8) + padding (24) = 126.4.
+    expect(onNaturalWidthChange).toHaveBeenLastCalledWith(126.4)
+  })
+
+  it('reports no natural width requirement when nothing in the subtree registers one (e.g. Paragraph-only content), the same way min-size registration is skipped', () => {
+    const onNaturalWidthChange = vi.fn()
+    render(<Secondary onNaturalWidthChange={onNaturalWidthChange}>{null}</Secondary>)
+
+    expect(onNaturalWidthChange).not.toHaveBeenCalled()
+  })
+
+  it('re-derives its natural width when a token changes, without any new registration', () => {
+    const onNaturalWidthChange = vi.fn()
+    render(
+      <TokensProvider>
+        <TokenEditor>
+          <Secondary onNaturalWidthChange={onNaturalWidthChange}>
+            <NaturalWidthProbe width={50} />
+          </Secondary>
+        </TokenEditor>
+      </TokensProvider>,
+    )
+
+    // layer 0, single item: no inter-item gap — 50 + padding (24) = 74.
+    expect(onNaturalWidthChange).toHaveBeenLastCalledWith(74)
+
+    act(() => {
+      fireEvent.click(screen.getByText('grow padding'))
+    })
+
+    expect(onNaturalWidthChange.mock.calls.at(-1)?.[0]).toBeGreaterThan(70)
+  })
+})
+
 describe('Secondary overflow (scroll fallback for when even collapsed children do not fit)', () => {
   it('scrolls along the row axis and clips the cross axis by default', () => {
     render(
@@ -428,6 +534,111 @@ describe('Secondary overflow (scroll fallback for when even collapsed children d
 
     expect(screen.getByTestId('a').parentElement).toHaveStyle({
       flexShrink: '0',
+    })
+  })
+
+  it('floors the row at its expanded content width while not collapsed, so a flexible ancestor track cannot squeeze it into a premature scroll', () => {
+    render(
+      <Secondary>
+        <ChildProbe label="a" expanded={50} />
+      </Secondary>,
+    )
+
+    // layer 0, single item: no inter-item gap — 50 + padding (24) = 74,
+    // the same total Secondary.recompute derives as requiredExpanded.
+    expect(screen.getByTestId('a').closest('div[style*="overflow"]')).toHaveStyle({
+      minWidth: '74px',
+    })
+  })
+
+  it('releases that floor once collapsed, letting the fallback scroll engage', () => {
+    render(
+      <Secondary forceCollapsed>
+        <ChildProbe label="a" expanded={50} />
+      </Secondary>,
+    )
+
+    expect(screen.getByTestId('a').closest('div[style*="overflow"]')).not.toHaveStyle({
+      minWidth: '74px',
+    })
+  })
+
+  it('floors a row-direction root at its own required height, so a CSS Grid caller cannot stretch it down to a shorter row track and clip it', () => {
+    render(
+      <Secondary>
+        <ChildProbe label="a" expanded={50} naturalHeight={30} />
+      </Secondary>,
+    )
+
+    // layer 0, single item: max child height (30) + padding (24) = 54.
+    expect(screen.getByTestId('a').closest('div[style*="overflow"]')).toHaveStyle({
+      minHeight: '54px',
+    })
+  })
+
+  it('leaves the cross-axis floor unset for a nested (non-root) row, which is a plain flex child rather than a grid item', () => {
+    render(
+      <Secondary direction="column">
+        <Secondary>
+          <ChildProbe label="a" expanded={50} naturalHeight={30} />
+        </Secondary>
+      </Secondary>,
+    )
+
+    expect(screen.getByTestId('a').closest('div[style*="overflow"]')).not.toHaveStyle({
+      minHeight: '54px',
+    })
+  })
+
+  it('releases the row cross-axis floor once collapsed, letting the fallback scroll engage', () => {
+    render(
+      <Secondary forceCollapsed>
+        <ChildProbe label="a" expanded={50} naturalHeight={30} />
+      </Secondary>,
+    )
+
+    expect(screen.getByTestId('a').closest('div[style*="overflow"]')).not.toHaveStyle({
+      minHeight: '54px',
+    })
+  })
+
+  it('floors a column-direction root at its own expanded width while not collapsed, so a CSS Grid caller cannot squeeze it below its labels', () => {
+    render(
+      <Secondary direction="column">
+        <ChildProbe label="a" expanded={50} naturalWidth={80} naturalCollapsedWidth={20} />
+      </Secondary>,
+    )
+
+    // layer 0, single item: naturalWidthFootprint = 80 + padding (24) = 104.
+    expect(screen.getByTestId('a').closest('div[style*="overflow"]')).toHaveStyle({
+      minWidth: '104px',
+    })
+  })
+
+  it('switches a column-direction root to its collapsed (icon-only) width floor once collapsed, rather than releasing it — there is no scroll fallback on this axis', () => {
+    render(
+      <Secondary direction="column" forceCollapsed>
+        <ChildProbe label="a" expanded={50} naturalWidth={80} naturalCollapsedWidth={20} />
+      </Secondary>,
+    )
+
+    // naturalCollapsedWidthFootprint = 20 + padding (24) = 44.
+    expect(screen.getByTestId('a').closest('div[style*="overflow"]')).toHaveStyle({
+      minWidth: '44px',
+    })
+  })
+
+  it('leaves the column cross-axis floor unset for a nested (non-root) column, which is a plain flex child rather than a grid item', () => {
+    render(
+      <Secondary>
+        <Secondary direction="column">
+          <ChildProbe label="a" expanded={50} naturalWidth={80} naturalCollapsedWidth={20} />
+        </Secondary>
+      </Secondary>,
+    )
+
+    expect(screen.getByTestId('a').closest('div[style*="overflow"]')).not.toHaveStyle({
+      minWidth: '104px',
     })
   })
 })
@@ -610,5 +821,55 @@ describe('drag-to-reorder', () => {
     expect(onReorder).not.toHaveBeenCalled()
     expect(a.style.opacity).toBe('1')
     expect(screen.getAllByTestId(/[abc]/).map((el) => el.dataset.testid)).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('public Secondary (items API)', () => {
+  it('renders each item kind via the real Button/Input/Paragraph/Secondary components', () => {
+    render(
+      <PublicSecondary
+        items={[
+          { kind: 'button', key: 'save', props: { label: 'Save' } },
+          { kind: 'paragraph', key: 'hint', props: { children: 'Unsaved changes' } },
+          {
+            kind: 'secondary',
+            key: 'nested',
+            props: { items: [{ kind: 'input', props: { label: 'Width', value: '1', onChange() {} } }] },
+          },
+        ]}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
+    expect(screen.getByRole('textbox')).toHaveValue('1')
+  })
+
+  // Never rendered — this only needs to exist for `tsc -b` to type-check
+  // it. Unlike an approach based on JSX element types (ruled out earlier:
+  // every JSX tag's static type erases to ReactElement<any, any>, so
+  // nothing distinguishes a <Button> from a <div> once either is written),
+  // `items` is plain structural data, so TypeScript really does check it —
+  // this `@ts-expect-error` is a real assertion: if `kind`/`props` checking
+  // is ever weakened, the directive itself starts failing the build,
+  // catching the regression the same way any other compile-time
+  // constraint would.
+  function typeCheckOnly() {
+    return (
+      <>
+        <PublicSecondary items={[{ kind: 'button', props: { label: 'Save' } }]} />
+        {/* @ts-expect-error 'div' is not a valid SecondaryItem kind */}
+        <PublicSecondary items={[{ kind: 'div', props: {} }]} />
+        <PublicSecondary
+          items={[
+            // @ts-expect-error ButtonProps requires `label`
+            { kind: 'button', props: {} },
+          ]}
+        />
+      </>
+    )
+  }
+
+  it('exists only to be type-checked, not run', () => {
+    expect(typeof typeCheckOnly).toBe('function')
   })
 })

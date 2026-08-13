@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Button } from './design-system/Button'
 import { Secondary } from './design-system/Secondary'
@@ -119,48 +119,107 @@ const TOOLS: Tool[] = [
 // self-referential). Left alone, that means only two of the four bars can
 // ever respond to the window narrowing. Rather than have each bar decide
 // independently anyway (which would look inconsistent even for the two
-// that can), one shared width breakpoint decides for the whole set, so
-// they collapse and expand together — with selfMeasure={false} on the two
-// row-direction roots (App.tsx) so neither one keeps its own independent
-// ResizeObserver reading racing against this shared one, which is what
-// caused a staggered collapse before that was added.
+// that can), one shared signal decides for the whole set, so they collapse
+// and expand together — with selfMeasure={false} on the two row-direction
+// roots (below) so neither one keeps its own independent ResizeObserver
+// reading racing against this shared one, which is what caused a staggered
+// collapse before that was added.
 //
-// A tempting alternative is deriving this threshold live from each bar's
-// real rendered content instead of a hand-measured number — tried and
-// reverted. It breaks two ways: first, settings/tools are column-direction,
-// so the size they register for their own *collapse* axis is a height sum,
-// not the width this threshold actually needs — there's no existing
-// mechanism that tracks a column root's cross-axis (width) requirement at
-// all. Second, feeding any root's own *currently rendered* width into a
-// signal that also controls its siblings' widths is circular: misc's real
-// available width depends on how much room settings/tools are currently
-// taking, which is itself controlled by this same shared signal — a
-// feedback loop that can oscillate or get stuck rather than converge.
+// The threshold this compares against used to be a single hand-measured
+// pixel constant. Deriving it live from each bar's real rendered content
+// instead was tried and reverted once, for two reasons that no longer
+// apply: settings/tools are column-direction, and the size they registered
+// for their own *collapse* axis was a height sum, not the width this
+// threshold needs — nothing tracked a column root's cross-axis (width)
+// requirement at all. And feeding a root's own *currently rendered* width
+// into a signal that also controls its siblings' widths was circular:
+// misc's real available width depended on how much room settings/tools
+// were currently taking, which was itself controlled by this same shared
+// signal — a feedback loop that could oscillate or get stuck rather than
+// converge.
 //
-// The number here is still measured, not guessed, and rechecked against
-// what the layout actually needs (~606px for settings/tools/misc side by
-// side, the largest of the four bars' requirements) — but with a
-// deliberately generous margin on top, rather than a tight fit, since a
-// real browser's font metrics won't exactly match whatever this was last
-// measured against, and the gap between a real resize and this signal
-// catching up (a window 'resize' event reaching React one JS tick after
-// the browser already reflowed) needs real slack too.
-const NARROW_BREAKPOINT = 760
+// Secondary's onNaturalWidthChange (see design-system/Secondary.tsx) now
+// answers both: it tracks a column root's true cross-axis requirement via
+// its own registry (max across children, not the sum the collapse axis
+// uses), and it reports each button/input's *natural*, unconstrained size —
+// measured off-viewport, decoupled from whatever the real DOM currently has
+// room for — never the live, possibly-squeezed rendered size, so there's no
+// feedback loop to converge or get stuck in.
+const CHROME_GAP = 12
+const CHROME_PADDING = 12
 
-function useIsNarrow(breakpoint: number): boolean {
-  const [isNarrow, setIsNarrow] = useState(() => window.innerWidth < breakpoint)
+export interface BarNaturalWidths {
+  files: number
+  settings: number
+  tools: number
+  misc: number
+}
+
+// The binding constraint used to be measured by hand as "settings/tools/
+// misc side by side" (~606px), on the assumption that row is always wider
+// than files' own row alone. Computing both and taking the max removes the
+// need to assume which one binds — correct even if a bar's content changes
+// later and shifts which row is actually the tightest.
+export function requiredChromeWidth(bars: BarNaturalWidths): number {
+  const secondRow = bars.settings + bars.tools + bars.misc + CHROME_GAP * 2
+  return Math.max(bars.files, secondRow) + CHROME_PADDING * 2
+}
+
+function useIsNarrow(bars: BarNaturalWidths): boolean {
+  const [windowWidth, setWindowWidth] = useState(() => window.innerWidth)
   useEffect(() => {
-    const onResize = () => setIsNarrow(window.innerWidth < breakpoint)
+    const onResize = () => setWindowWidth(window.innerWidth)
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
-  }, [breakpoint])
-  return isNarrow
+  }, [])
+  return windowWidth < requiredChromeWidth(bars)
 }
 
 function AppContent() {
   const [activeTool, setActiveTool] = useState<Tool | null>(TOOLS[0]!)
   const theme = useTheme()
-  const isNarrow = useIsNarrow(NARROW_BREAKPOINT)
+
+  const [barWidths, setBarWidths] = useState<BarNaturalWidths>({
+    files: 0,
+    settings: 0,
+    tools: 0,
+    misc: 0,
+  })
+  // One stable callback per bar (empty deps, functional update) rather than
+  // a single `setBarWidth(key)` factory — a fresh closure identity on every
+  // render would re-fire Secondary's onNaturalWidthChange effect for every
+  // unrelated re-render of AppContent (e.g. switching tools), even though
+  // nothing about that bar's own width changed.
+  const setFilesWidth = useCallback(
+    (width: number) =>
+      setBarWidths((previous) =>
+        previous.files === width ? previous : { ...previous, files: width },
+      ),
+    [],
+  )
+  const setSettingsWidth = useCallback(
+    (width: number) =>
+      setBarWidths((previous) =>
+        previous.settings === width ? previous : { ...previous, settings: width },
+      ),
+    [],
+  )
+  const setToolsWidth = useCallback(
+    (width: number) =>
+      setBarWidths((previous) =>
+        previous.tools === width ? previous : { ...previous, tools: width },
+      ),
+    [],
+  )
+  const setMiscWidth = useCallback(
+    (width: number) =>
+      setBarWidths((previous) =>
+        previous.misc === width ? previous : { ...previous, misc: width },
+      ),
+    [],
+  )
+
+  const isNarrow = useIsNarrow(barWidths)
 
   return (
     <div
@@ -190,42 +249,59 @@ function AppContent() {
           gridTemplateColumns: 'auto auto 1fr',
           gridTemplateRows: 'auto auto 1fr',
           gridTemplateAreas: `"files files files" "settings tools misc" "settings tools canvas"`,
-          gap: 12,
-          padding: 12,
+          gap: CHROME_GAP,
+          padding: CHROME_PADDING,
           pointerEvents: 'none',
         }}
       >
-        <Secondary forceCollapsed={isNarrow} selfMeasure={false} style={{ gridArea: 'files' }}>
-          <Button icon={<NewIcon />} label="New" onClick={() => console.log('new')} />
-          <Button icon={<OpenIcon />} label="Open" onClick={() => console.log('open')} />
-          <Button icon={<SaveIcon />} label="Save" onClick={() => console.log('save')} />
-        </Secondary>
+        <Secondary
+          forceCollapsed={isNarrow}
+          selfMeasure={false}
+          onNaturalWidthChange={setFilesWidth}
+          style={{ gridArea: 'files' }}
+          items={[
+            { kind: 'button', key: 'new', props: { icon: <NewIcon />, label: 'New', onClick: () => console.log('new') } },
+            { kind: 'button', key: 'open', props: { icon: <OpenIcon />, label: 'Open', onClick: () => console.log('open') } },
+            { kind: 'button', key: 'save', props: { icon: <SaveIcon />, label: 'Save', onClick: () => console.log('save') } },
+          ]}
+        />
 
-        <SettingsPanel forceCollapsed={isNarrow} style={{ gridArea: 'settings' }} />
+        <SettingsPanel
+          forceCollapsed={isNarrow}
+          onNaturalWidthChange={setSettingsWidth}
+          style={{ gridArea: 'settings' }}
+        />
 
         <Secondary
           direction="column"
           forceCollapsed={isNarrow}
+          onNaturalWidthChange={setToolsWidth}
           style={{ gridArea: 'tools', height: '100%' }}
-        >
-          {TOOLS.map((tool) => (
-            <Button
-              key={tool.key}
-              icon={tool.icon}
-              label={tool.label}
-              onClick={() => setActiveTool(tool)}
-            />
-          ))}
-        </Secondary>
+          items={TOOLS.map((tool) => ({
+            kind: 'button' as const,
+            key: tool.key,
+            props: { icon: tool.icon, label: tool.label, onClick: () => setActiveTool(tool) },
+          }))}
+        />
 
-        <Secondary forceCollapsed={isNarrow} selfMeasure={false} style={{ gridArea: 'misc' }}>
-          <Button
-            icon={<AnalysisIcon />}
-            label="Analysis"
-            onClick={() => console.log('analysis')}
-          />
-          <Button icon={<XRayIcon />} label="X-Ray" onClick={() => console.log('x-ray')} />
-        </Secondary>
+        <Secondary
+          forceCollapsed={isNarrow}
+          selfMeasure={false}
+          onNaturalWidthChange={setMiscWidth}
+          style={{ gridArea: 'misc' }}
+          items={[
+            {
+              kind: 'button',
+              key: 'analysis',
+              props: { icon: <AnalysisIcon />, label: 'Analysis', onClick: () => console.log('analysis') },
+            },
+            {
+              kind: 'button',
+              key: 'x-ray',
+              props: { icon: <XRayIcon />, label: 'X-Ray', onClick: () => console.log('x-ray') },
+            },
+          ]}
+        />
 
         {activeTool ? (
           // A bare Button, not a Secondary: it's a single free-floating

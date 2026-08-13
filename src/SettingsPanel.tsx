@@ -1,10 +1,8 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
-import { Input } from './design-system/Input'
 import type { ColorRole } from './design-system/theme'
 import { useTheme } from './design-system/ThemeProvider'
-import { Paragraph } from './design-system/Paragraph'
-import { Secondary } from './design-system/Secondary'
+import { Secondary, type SecondaryItem } from './design-system/Secondary'
 import type { SizeScale } from './design-system/tokens'
 import { useSetTokens, useTokens } from './design-system/TokensProvider'
 
@@ -80,9 +78,11 @@ function numberField(
 export function SettingsPanel({
   style,
   forceCollapsed,
+  onNaturalWidthChange,
 }: {
   style?: CSSProperties
   forceCollapsed?: boolean
+  onNaturalWidthChange?: (width: number) => void
 }) {
   const theme = useTheme()
   const tokens = useTokens()
@@ -165,29 +165,38 @@ export function SettingsPanel({
     },
   ]
 
+  const sectionItems: SecondaryItem[] = sections.map((section) => ({
+    kind: 'secondary',
+    key: section.title,
+    props: {
+      direction: 'column',
+      items: [
+        { kind: 'paragraph', key: 'title', props: { children: section.title } },
+        ...section.fields.map(
+          (field): SecondaryItem => ({
+            kind: 'input',
+            key: field.key,
+            props: {
+              label: field.label,
+              value: rawValues[field.key] ?? field.value,
+              onChange: (raw) => {
+                setRawValues((previous) => ({ ...previous, [field.key]: raw }))
+                field.onChange(raw)
+              },
+            },
+          }),
+        ),
+      ],
+    },
+  }))
+
   return (
     <Secondary
       direction="column"
       forceCollapsed={forceCollapsed}
+      onNaturalWidthChange={onNaturalWidthChange}
       style={{ height: '100%', ...style }}
-    >
-      <Paragraph>Settings</Paragraph>
-      {sections.map((section) => (
-        <Secondary key={section.title} direction="column">
-          <Paragraph>{section.title}</Paragraph>
-          {section.fields.map((field) => (
-            <Input
-              key={field.key}
-              label={field.label}
-              value={rawValues[field.key] ?? field.value}
-              onChange={(raw) => {
-                setRawValues((previous) => ({ ...previous, [field.key]: raw }))
-                field.onChange(raw)
-              }}
-            />
-          ))}
-        </Secondary>
-      ))}
-    </Secondary>
+      items={[{ kind: 'paragraph', key: 'title', props: { children: 'Settings' } }, ...sectionItems]}
+    />
   )
 }

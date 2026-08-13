@@ -12,6 +12,30 @@ be hidden or reordered by the user (panels, toolbars, docked groups) — a
 Primary's own footprint is always a function of its content and its
 enclosing Secondary's collapse state.
 
+A Secondary's contents are declared as data, not JSX children. `Secondary`
+takes an `items: SecondaryItem[]` prop — each entry is a `{ kind, key?, props }`
+record naming which Primary (or nested Secondary) it stands for and the exact
+props that component takes — and `Secondary` is the only place that ever
+constructs the corresponding `<Button>`/`<Input>`/`<Paragraph>`/`<Secondary>`
+element from it. This isn't a style preference: a JSX expression's static type
+is always erased to `ReactElement<any, any>` the moment a tag is written
+(`JSX.Element extends React.ReactElement<any, any>`), so nothing downstream
+can ever distinguish "a real `<Button>`" from "any other element" through the
+type system — a `children: ReactNode` contract (or any prop typed as a union
+of specific `ReactElement<P>`s) accepts literally anything once a JSX tag
+produces the value, regardless of how the union is written. Plain data doesn't
+go through that erasure: `props` is checked against the real `ButtonProps`/
+`InputProps`/`ParagraphProps` interface at the call site, so a missing
+required field or an invented `kind` fails to compile. Adding a new Primary
+means adding its variant to `SecondaryItem` and a case to `Secondary`'s
+internal render switch — both in `Secondary.tsx`, nowhere else.
+
+`SecondaryImpl` is the untyped rendering/measurement engine `Secondary`
+delegates to (still keyed off plain `ReactNode` children). It stays exported
+only so tests can drive the collapse/registration machinery directly with
+synthetic probe components that aren't real Primaries — app code should
+always use `Secondary`, never `SecondaryImpl`.
+
 ## Layer
 
 `layer` is not a style knob set per component — it is the nesting depth of

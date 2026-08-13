@@ -33,20 +33,32 @@ describe('isAtSizeFloor', () => {
 describe('computeLightness', () => {
   const scale = { lStep: 0.08, lMin: 0, lMax: 1 }
 
-  it('sits one lStep above black at layer 0 in dark mode', () => {
-    expect(computeLightness(0, true, scale)).toBeCloseTo(0.08)
+  // Layer 0 sits two lStep's from the true extreme, not one — the canvas
+  // (layer -1) reserves the first step so it never has to compete for
+  // contrast in the region right next to true black/white, where OKLCH's
+  // perceptual uniformity is weakest.
+  it('sits two lStep from black at layer 0 in dark mode', () => {
+    expect(computeLightness(0, true, scale)).toBeCloseTo(0.16)
   })
 
-  it('sits one lStep below white at layer 0 in light mode', () => {
-    expect(computeLightness(0, false, scale)).toBeCloseTo(0.92)
+  it('sits two lStep from white at layer 0 in light mode', () => {
+    expect(computeLightness(0, false, scale)).toBeCloseTo(0.84)
   })
 
   it('gets lighter with layer in dark mode', () => {
-    expect(computeLightness(1, true, scale)).toBeCloseTo(0.16)
+    expect(computeLightness(1, true, scale)).toBeCloseTo(0.24)
   })
 
   it('gets darker with layer in light mode', () => {
-    expect(computeLightness(1, false, scale)).toBeCloseTo(0.84)
+    expect(computeLightness(1, false, scale)).toBeCloseTo(0.76)
+  })
+
+  it('sits exactly one lStep from black at layer -1 (the canvas floor)', () => {
+    expect(computeLightness(-1, true, scale)).toBeCloseTo(0.08)
+  })
+
+  it('sits exactly one lStep from white at layer -1 (the canvas floor)', () => {
+    expect(computeLightness(-1, false, scale)).toBeCloseTo(0.92)
   })
 
   it('clamps to lMax in dark mode', () => {

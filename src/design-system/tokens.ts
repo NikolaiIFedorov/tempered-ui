@@ -18,10 +18,15 @@ export interface ColorScale {
   lMax: number
 }
 
+// baseL (layer -1) is the canvas floor: one lStep from the true extreme,
+// not the extreme itself. Reserving that first step for the canvas keeps
+// every rendered layer's contrast step in the region where OKLCH's
+// perceptual uniformity actually holds, away from the compression near
+// true black/white where an equal lStep reads as a smaller visual jump.
 export function computeLightness(layer: number, darkMode: boolean, scale: ColorScale): number {
   const baseL = darkMode ? scale.lStep : 1 - scale.lStep
   const sign = darkMode ? 1 : -1
-  const l = baseL + sign * layer * scale.lStep
+  const l = baseL + sign * (layer + 1) * scale.lStep
   return Math.min(scale.lMax, Math.max(scale.lMin, l))
 }
 

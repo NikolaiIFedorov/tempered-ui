@@ -1,8 +1,13 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useCollapsed, useLayer, useSecondaryDirection } from './layer'
+import { CollapseProvider, useCollapsed, useLayer, useSecondaryDirection } from './layer'
 import { PrimaryContent } from './PrimaryContent'
-import { useMinSizeRegistration } from './registry'
+import {
+  useMinSizeRegistration,
+  useNaturalCollapsedWidthRegistration,
+  useNaturalHeightRegistration,
+  useNaturalWidthRegistration,
+} from './registry'
 import { computeInkColor, toCssColor } from './theme'
 import { useTheme } from './ThemeProvider'
 import { computeSize } from './tokens'
@@ -25,6 +30,20 @@ export function Button({ icon, label, onClick, disabled }: ButtonProps) {
   const padding = computeSize(layer, PADDING_SCALE)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const [expandedSize, setExpandedSize] = useState<number | null>(null)
+  // A second, always-on measurement, independent of both the real button's
+  // current collapse state and the space its container currently has to
+  // offer — see the probe below for why.
+  const naturalWidthProbeRef = useRef<HTMLSpanElement>(null)
+  const [naturalWidth, setNaturalWidth] = useState<number | null>(null)
+  // Same probe, its other dimension — see registry.ts's NaturalHeightRegistry
+  // for why a row-direction root's own natural height needs tracking too.
+  const [naturalHeight, setNaturalHeight] = useState<number | null>(null)
+  // A second, independent probe forced *collapsed* rather than expanded —
+  // see registry.ts's NaturalCollapsedWidthRegistry for why a column root
+  // needs this as a distinct number from naturalWidth above, not derived
+  // from it.
+  const naturalCollapsedWidthProbeRef = useRef<HTMLSpanElement>(null)
+  const [naturalCollapsedWidth, setNaturalCollapsedWidth] = useState<number | null>(null)
 
   // Measuring the real <button> (not just PrimaryContent's inner span)
   // means padding/border are captured automatically, whatever they are —
@@ -41,7 +60,33 @@ export function Button({ icon, label, onClick, disabled }: ButtonProps) {
     setExpandedSize((previous) => (previous === size ? previous : size))
   }, [collapsed, icon, label, direction, tokens])
 
+  // The real button's own rect can't answer "how wide would this be with
+  // its label showing" once it's actually collapsed or squeezed by a tight
+  // container — a column stretches every button to its container's current
+  // width, which itself can shrink below the label's true content need
+  // under space pressure, so reading rect.width there would report the
+  // squeeze, not the requirement, and feed a decision meant to relieve
+  // that squeeze with an already-squeezed number. This clone sits off-
+  // viewport at its own intrinsic width, forced to its uncollapsed form
+  // regardless of the real button's live collapse state, so it always
+  // reports the true, unconstrained answer.
+  useLayoutEffect(() => {
+    if (!naturalWidthProbeRef.current) return
+    const rect = naturalWidthProbeRef.current.getBoundingClientRect()
+    setNaturalWidth((previous) => (previous === rect.width ? previous : rect.width))
+    setNaturalHeight((previous) => (previous === rect.height ? previous : rect.height))
+  }, [icon, label, tokens])
+
+  useLayoutEffect(() => {
+    if (!naturalCollapsedWidthProbeRef.current) return
+    const width = naturalCollapsedWidthProbeRef.current.getBoundingClientRect().width
+    setNaturalCollapsedWidth((previous) => (previous === width ? previous : width))
+  }, [icon, label, tokens])
+
   useMinSizeRegistration(expandedSize === null ? null : { expanded: expandedSize })
+  useNaturalWidthRegistration(naturalWidth)
+  useNaturalHeightRegistration(naturalHeight)
+  useNaturalCollapsedWidthRegistration(naturalCollapsedWidth)
 
   // One layer deeper than the enclosing Secondary's own background — reuses
   // the same layer equation to give the button a distinct surface rather
@@ -75,6 +120,54 @@ export function Button({ icon, label, onClick, disabled }: ButtonProps) {
       }}
     >
       <PrimaryContent icon={icon} label={label} />
+      {/* Off-viewport clone used only to measure the button's true,
+          uncollapsed intrinsic width — see naturalWidthProbeRef above. Not
+          part of the visible button; nested inside it purely so it inherits
+          the same layer/token context without needing its own providers.
+          A <span>, not a <div> — <button> only permits phrasing content. */}
+      <span
+        aria-hidden="true"
+        ref={naturalWidthProbeRef}
+        style={{
+          position: 'fixed',
+          top: -99999,
+          left: -99999,
+          visibility: 'hidden',
+          pointerEvents: 'none',
+          display: 'inline-block',
+          boxSizing: 'border-box',
+          padding,
+        }}
+      >
+        <CollapseProvider value={false}>
+          {/* A placeholder, not the caller's own icon element — PrimaryContent
+              always boxes an icon to exactly 1em square regardless of its
+              content, so this measures identically, without also cloning
+              whatever data-testid/key the caller's icon carries. */}
+          <PrimaryContent icon={icon ? <span /> : undefined} label={label} />
+        </CollapseProvider>
+      </span>
+      {/* Off-viewport clone forced *collapsed* — the icon-only counterpart to
+          the probe above, for a column root's cross-axis floor once it's
+          actually collapsed (see naturalCollapsedWidthProbeRef above). */}
+      <span
+        aria-hidden="true"
+        ref={naturalCollapsedWidthProbeRef}
+        style={{
+          position: 'fixed',
+          top: -99999,
+          left: -99999,
+          visibility: 'hidden',
+          pointerEvents: 'none',
+          display: 'inline-block',
+          boxSizing: 'border-box',
+          padding,
+        }}
+      >
+        <CollapseProvider value={true}>
+          <PrimaryContent icon={icon ? <span /> : undefined} label={label} />
+        </CollapseProvider>
+      </span>
     </button>
   )
 }

@@ -7,6 +7,7 @@ import {
   resolveRoleColor,
   watchDarkMode,
 } from './theme'
+import { computeLightness } from './tokens'
 
 const DEFAULT_BASE_ROLE: ColorRole = { hue: 250, chroma: 0.015, lMin: 0.05, lMax: 0.95 }
 const DEFAULT_ACCENT_ROLE: ColorRole = { hue: 250, chroma: 0.15, lMin: 0.2, lMax: 0.8 }
@@ -41,13 +42,19 @@ function buildThemeValue(
     darkMode,
     resolveBase: (layer) => resolveRoleColor(baseRole, layer, { darkMode, lStep }),
     resolveAccent: (layer) => resolveRoleColor(accentRole, layer, { darkMode, lStep }),
-    // The page canvas, not a Secondary layer — the true unclamped extreme
-    // (pure black/white), not resolveBase(-1). lMin/lMax exist to stop deep
-    // *nesting* from washing a surface out to an extreme; the canvas isn't
-    // a nested surface at risk of that, it's the one thing that's supposed
-    // to reach the extreme, so clamping it defeats the point of using it as
-    // the reference layer 0 steps away from.
-    resolveCanvas: () => ({ l: darkMode ? 0 : 1, c: baseRole.chroma, h: baseRole.hue }),
+    // The page canvas, not a Secondary layer — layer -1 in the same
+    // lightness equation every other layer uses, unclamped by the role's
+    // lMin/lMax (those exist to stop deep *nesting* from washing a surface
+    // out, which doesn't apply to the canvas). It deliberately sits one
+    // lStep short of true black/white rather than at the true extreme: a
+    // screen showing nothing stays visually distinct from a canvas that's
+    // merely dark, and every real contrast step in the app then falls in
+    // the perceptually well-behaved region away from that extreme.
+    resolveCanvas: () => ({
+      l: computeLightness(-1, darkMode, { lStep, lMin: -Infinity, lMax: Infinity }),
+      c: baseRole.chroma,
+      h: baseRole.hue,
+    }),
     baseRole,
     setBaseRole,
     accentRole,

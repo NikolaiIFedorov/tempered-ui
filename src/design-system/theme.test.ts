@@ -16,8 +16,10 @@ describe('resolveRoleColor', () => {
     const layer0 = resolveRoleColor(role, 0, theme)
     const layer1 = resolveRoleColor(role, 1, theme)
 
-    expect(layer0).toEqual({ l: 0.08, c: 0.1, h: 250 })
-    expect(layer1.l).toBeCloseTo(0.16)
+    expect(layer0.l).toBeCloseTo(0.16)
+    expect(layer0.c).toBe(0.1)
+    expect(layer0.h).toBe(250)
+    expect(layer1.l).toBeCloseTo(0.24)
     expect(layer1.c).toBe(0.1)
     expect(layer1.h).toBe(250)
   })
