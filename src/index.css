@@ -13,6 +13,15 @@ body {
   height: 100%;
 }
 
+/* Form controls don't inherit font-family/font-size from the page by
+   default (the browser UA stylesheet gives them their own) — this makes
+   Button's <button> and Input's <input> pick up the same ambient
+   fontFamily/fontSize as everything else instead of diverging from it. */
+button,
+input {
+  font: inherit;
+}
+
 /* PrimaryContent sizes its icon wrapper to 1em (matching the current text
    height) and expects the icon itself to fill that box — an icon's own
    width/height attributes (SVG's <svg width="20" height="20">, a common
@@ -21,4 +30,47 @@ body {
 .primary-icon > svg {
   width: 100%;
   height: 100%;
+}
+
+/* Shared interaction feedback for every clickable Primary surface (Button,
+   Input's field, Selector's option buttons) — a CSS class for what inline
+   styles can't express (:hover/:active/:focus-visible pseudo-classes),
+   combined with a per-instance CSS var for the token-driven duration, the
+   same shape as .primary-icon above. Only background-color/color/filter/
+   box-shadow/outline/transform ever animate here — see docs/design-system.md
+   for why width/height/padding don't. filter: brightness() is color-agnostic,
+   so hover/press work on any computed OKLCH background without theme.ts
+   needing to produce a separate shade. */
+.ds-interactive {
+  transition-property: background-color, color, filter, box-shadow, transform;
+  transition-duration: var(--ds-motion-duration, 150ms);
+  transition-timing-function: ease-out;
+}
+/* Hover and keyboard-focus are the same event conceptually — both prime an
+   element as the candidate for the next action, neither has fired it yet —
+   so both get the same lift. Focus keeps its own outline on top (below):
+   hover has the pointer itself as a redundant "what's targeted" cue, focus
+   has nothing else, so it can't rely on the lift alone to carry that job. */
+.ds-interactive:hover:not(:disabled),
+.ds-interactive:focus-visible:not(:disabled) {
+  filter: brightness(1.08);
+  /* Fixed, not a token — the same reasoning as MOTION_EASING (motion.ts):
+     nothing here needs a *tuned* magnitude, only motionDuration needs a
+     tuned speed. */
+  transform: scale(1.03);
+}
+/* Declared after the lift rule so it wins the same `transform` property
+   when both match (pressing while hovering, or activating via Enter/Space
+   while focused) — a press should read as overriding the primed lift, not
+   compounding with it. */
+.ds-interactive:active:not(:disabled) {
+  transform: translateY(2px);
+}
+.ds-interactive:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.ds-interactive:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
