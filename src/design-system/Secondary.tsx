@@ -1,4 +1,13 @@
-import { Children, isValidElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Children,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import type { CSSProperties, ReactElement, ReactNode } from 'react'
 import { Button, type ButtonProps } from './Button'
 import { Input, type InputProps } from './Input'
@@ -11,6 +20,7 @@ import {
   useSecondaryDirection,
 } from './layer'
 import { Paragraph, type ParagraphProps } from './Paragraph'
+import { Selector, type SelectorProps } from './Selector'
 import {
   type MinSizeEntry,
   MinSizeRegistryProvider,
@@ -24,8 +34,8 @@ import {
 } from './registry'
 import { computeInkColor, toCssColor } from './theme'
 import { useTheme } from './ThemeProvider'
-import { computeSize } from './tokens'
 import { useTokens } from './TokensProvider'
+import { MOTION_EASING, playFlip } from './motion'
 
 // Every kind of item a Secondary can hold, as plain data rather than a
 // JSX element — a JSX expression's static type is always erased to
@@ -42,6 +52,7 @@ export type PrimaryItem =
   | { kind: 'button'; key?: string; props: ButtonProps }
   | { kind: 'input'; key?: string; props: InputProps }
   | { kind: 'paragraph'; key?: string; props: ParagraphProps }
+  | { kind: 'selector'; key?: string; props: SelectorProps }
 
 export type SecondaryItem = PrimaryItem | { kind: 'secondary'; key?: string; props: SecondaryProps }
 
@@ -53,6 +64,8 @@ function renderSecondaryItem(item: SecondaryItem): ReactElement {
       return <Input key={item.key} {...item.props} />
     case 'paragraph':
       return <Paragraph key={item.key} {...item.props} />
+    case 'selector':
+      return <Selector key={item.key} {...item.props} />
     case 'secondary':
       return <Secondary key={item.key} {...item.props} />
   }
@@ -135,11 +148,8 @@ export function SecondaryImpl({
   // Input read to know whether to stretch.
   const parentDirection = useSecondaryDirection()
   const theme = useTheme()
-  const {
-    secondaryGap: GAP_SCALE,
-    secondaryPadding: PADDING_SCALE,
-    secondaryRadiusRatio: RADIUS_RATIO,
-  } = useTokens()
+  const { padding: PADDING, motionDuration } = useTokens()
+  const GAP = PADDING
   // A Secondary nested inside another Secondary is always wrapped in
   // flexShrink: 0 by its parent, so its own box can never actually be
   // squeezed by row layout — only the root (no ancestor Secondary) has a
@@ -192,6 +202,11 @@ export function SecondaryImpl({
   const itemRefs = useRef(new Map<string, HTMLDivElement>())
   const [dragOrder, setDragOrder] = useState<string[] | null>(null)
   const reorderStateRef = useRef<{ key: string; order: string[] } | null>(null)
+  // Every item's rect right before a mid-drag reorder commits — the "First"
+  // half of the FLIP technique the effect below plays out (see motion.ts's
+  // playFlip). Written just before setDragOrder, consumed and cleared by
+  // the effect once React has re-rendered with the new order.
+  const preReorderRectsRef = useRef<Map<string, DOMRect> | null>(null)
 
   const recompute = useCallback(
     (availableSize: number) => {
@@ -200,9 +215,8 @@ export function SecondaryImpl({
         requiredExpanded += entry.expanded
       }
       const itemCount = entries.current.size
-      const gap = computeSize(layer, GAP_SCALE)
-      const gapTotal = gap * Math.max(0, itemCount - 1)
-      const paddingTotal = computeSize(layer, PADDING_SCALE) * 2
+      const gapTotal = GAP * Math.max(0, itemCount - 1)
+      const paddingTotal = PADDING * 2
       requiredExpanded += gapTotal + paddingTotal
 
       setFootprint((previous) =>
@@ -215,7 +229,7 @@ export function SecondaryImpl({
         setOwnCollapsed(availableSize < requiredExpanded)
       }
     },
-    [layer, selfMeasures, GAP_SCALE, PADDING_SCALE],
+    [selfMeasures, GAP, PADDING],
   )
 
   // Reports this Secondary's own aggregate footprint to its ancestor's
@@ -240,7 +254,7 @@ export function SecondaryImpl({
 
   const recomputeNaturalWidth = useCallback(() => {
     const widths = [...naturalWidthEntries.current.values()]
-    const paddingTotal = computeSize(layer, PADDING_SCALE) * 2
+    const paddingTotal = PADDING * 2
     if (widths.length === 0) {
       // Nothing in this subtree needs protecting (e.g. an all-Paragraph
       // section) — no natural width requirement to report, the same way
@@ -250,12 +264,10 @@ export function SecondaryImpl({
     }
     const width =
       direction === 'row'
-        ? widths.reduce((sum, w) => sum + w, 0) +
-          computeSize(layer, GAP_SCALE) * Math.max(0, widths.length - 1) +
-          paddingTotal
+        ? widths.reduce((sum, w) => sum + w, 0) + GAP * Math.max(0, widths.length - 1) + paddingTotal
         : Math.max(...widths) + paddingTotal
     setNaturalWidthFootprint((previous) => (previous === width ? previous : width))
-  }, [layer, direction, GAP_SCALE, PADDING_SCALE])
+  }, [direction, GAP, PADDING])
 
   // Reports this Secondary's own aggregate natural width to its ancestor's
   // registry (a no-op for the root, which has no ancestor registry — see
@@ -290,19 +302,17 @@ export function SecondaryImpl({
 
   const recomputeNaturalHeight = useCallback(() => {
     const heights = [...naturalHeightEntries.current.values()]
-    const paddingTotal = computeSize(layer, PADDING_SCALE) * 2
+    const paddingTotal = PADDING * 2
     if (heights.length === 0) {
       setNaturalHeightFootprint(null)
       return
     }
     const height =
       direction === 'column'
-        ? heights.reduce((sum, h) => sum + h, 0) +
-          computeSize(layer, GAP_SCALE) * Math.max(0, heights.length - 1) +
-          paddingTotal
+        ? heights.reduce((sum, h) => sum + h, 0) + GAP * Math.max(0, heights.length - 1) + paddingTotal
         : Math.max(...heights) + paddingTotal
     setNaturalHeightFootprint((previous) => (previous === height ? previous : height))
-  }, [layer, direction, GAP_SCALE, PADDING_SCALE])
+  }, [direction, GAP, PADDING])
 
   // Reports this Secondary's own aggregate natural height to its ancestor's
   // registry (a no-op for the root, which has no ancestor registry — a root
@@ -330,19 +340,17 @@ export function SecondaryImpl({
 
   const recomputeNaturalCollapsedWidth = useCallback(() => {
     const widths = [...naturalCollapsedWidthEntries.current.values()]
-    const paddingTotal = computeSize(layer, PADDING_SCALE) * 2
+    const paddingTotal = PADDING * 2
     if (widths.length === 0) {
       setNaturalCollapsedWidthFootprint(null)
       return
     }
     const width =
       direction === 'row'
-        ? widths.reduce((sum, w) => sum + w, 0) +
-          computeSize(layer, GAP_SCALE) * Math.max(0, widths.length - 1) +
-          paddingTotal
+        ? widths.reduce((sum, w) => sum + w, 0) + GAP * Math.max(0, widths.length - 1) + paddingTotal
         : Math.max(...widths) + paddingTotal
     setNaturalCollapsedWidthFootprint((previous) => (previous === width ? previous : width))
-  }, [layer, direction, GAP_SCALE, PADDING_SCALE])
+  }, [direction, GAP, PADDING])
 
   // Reports this Secondary's own aggregate collapsed width to its ancestor's
   // registry (a no-op for the root, which has no ancestor registry — a root
@@ -393,6 +401,24 @@ export function SecondaryImpl({
 
   const collapsed = (selfMeasures ? ownCollapsed : ancestorCollapsed) || forceCollapsed
 
+  // The "Play" half of FLIP, run once per reorder step after React has
+  // committed the new DOM order — preReorderRectsRef (written in
+  // onWindowPointerMove, just before the setDragOrder that causes this
+  // effect to run) is the "First" half. Every item glides from where it
+  // used to be to its real new slot instead of teleporting there, dragged
+  // item included — it's already the one whose position is driving the
+  // reorder, so it gets the same glide as everyone else rather than a
+  // special case.
+  useLayoutEffect(() => {
+    const previousRects = preReorderRectsRef.current
+    if (!previousRects) return
+    preReorderRectsRef.current = null
+    for (const [key, el] of itemRefs.current) {
+      const previousRect = previousRects.get(key)
+      if (previousRect) playFlip(el, previousRect, motionDuration)
+    }
+  }, [dragOrder, motionDuration])
+
   // Reordering visibly moves the dragged item's DOM node to a new sibling
   // position on every step — and moving a node that holds native pointer
   // capture makes the browser silently drop that capture mid-drag (visible
@@ -415,6 +441,12 @@ export function SecondaryImpl({
       if (!onReorder) return
       reorderStateRef.current = { key, order: naturalOrder }
       setDragOrder(naturalOrder)
+      // Whether the pointer is currently pushing past a real boundary (the
+      // first/last position, nothing left to reorder into) — closed over
+      // by onWindowPointerMove alone, not a ref, since nothing outside this
+      // drag session ever needs to read it. Reset implicitly every drag by
+      // being declared fresh here.
+      let pastBoundary = false
 
       const endDrag = (commit: boolean) => {
         const state = reorderStateRef.current
@@ -441,14 +473,24 @@ export function SecondaryImpl({
         const order = [...state.order]
         const draggedIndex = order.indexOf(state.key)
         let targetIndex = draggedIndex
+        // The row's real leading/trailing edge among the *other* items —
+        // lets the boundary check below tell "pointer hasn't crossed
+        // another item's midpoint yet" apart from "there's nothing left to
+        // reorder past," which plain index comparison can't distinguish
+        // (both read as targetIndex === draggedIndex).
+        let minEdge = Infinity
+        let maxEdge = -Infinity
 
         order.forEach((orderKey, index) => {
           if (orderKey === state.key) return
           const el = itemRefs.current.get(orderKey)
           if (!el) return
           const rect = el.getBoundingClientRect()
-          const mid =
-            direction === 'row' ? (rect.left + rect.right) / 2 : (rect.top + rect.bottom) / 2
+          const start = direction === 'row' ? rect.left : rect.top
+          const end = direction === 'row' ? rect.right : rect.bottom
+          minEdge = Math.min(minEdge, start)
+          maxEdge = Math.max(maxEdge, end)
+          const mid = (start + end) / 2
           if (pointerPos > mid && index > targetIndex) targetIndex = index
           if (pointerPos < mid && index < targetIndex) targetIndex = index
         })
@@ -457,7 +499,49 @@ export function SecondaryImpl({
           order.splice(draggedIndex, 1)
           order.splice(targetIndex, 0, state.key)
           reorderStateRef.current = { key: state.key, order }
+          // Snapshot every item's rect *before* the reorder commits — the
+          // "First" half of FLIP, played out once React re-renders with
+          // this new order (see the useLayoutEffect above).
+          preReorderRectsRef.current = new Map(
+            [...itemRefs.current].map(([itemKey, el]) => [itemKey, el.getBoundingClientRect()]),
+          )
           setDragOrder(order)
+          pastBoundary = false
+          return
+        }
+
+        // No reorder happened this move — either the pointer hasn't moved
+        // far enough yet, or it's pushing past a real boundary (already at
+        // the first/last position, nothing left to swap with).
+        const pushingPastEnd = targetIndex === order.length - 1 && pointerPos > maxEdge
+        const pushingPastStart = targetIndex === 0 && pointerPos < minEdge
+        const isPastBoundary = pushingPastEnd || pushingPastStart
+
+        if (isPastBoundary && !pastBoundary) {
+          pastBoundary = true
+          const draggedEl = itemRefs.current.get(state.key)
+          // A brief overshoot-and-return in the direction the pointer is
+          // pushing — the boundary equivalent of the FLIP glide above, for
+          // the one case FLIP doesn't cover (nothing actually moved).
+          // Web Animations API, not React state: a one-shot effect that
+          // doesn't need a re-render to play. Feature-detected, not just
+          // relied on — jsdom (this file's own test environment) doesn't
+          // implement Element.animate().
+          if (draggedEl && typeof draggedEl.animate === 'function') {
+            const bounceDistance = PADDING / 2
+            const offset = pushingPastEnd ? bounceDistance : -bounceDistance
+            const axis = direction === 'row' ? 'X' : 'Y'
+            draggedEl.animate(
+              [
+                { transform: `translate${axis}(0px)` },
+                { transform: `translate${axis}(${offset}px)` },
+                { transform: `translate${axis}(0px)` },
+              ],
+              { duration: motionDuration, easing: MOTION_EASING },
+            )
+          }
+        } else if (!isPastBoundary) {
+          pastBoundary = false
         }
       }
 
@@ -471,14 +555,14 @@ export function SecondaryImpl({
       window.addEventListener('pointercancel', onWindowPointerCancel)
       activeDragCleanupRef.current = () => endDrag(false)
     },
-    [onReorder, direction],
+    [onReorder, direction, PADDING, motionDuration],
   )
 
   if (hidden) return null
 
   const background = theme.resolveBase(layer)
   const ink = computeInkColor(background)
-  const padding = computeSize(layer, PADDING_SCALE)
+  const padding = PADDING
 
   const keyedChildren = new Map<string, ReactNode>()
   const naturalOrder: string[] = []
@@ -515,11 +599,17 @@ export function SecondaryImpl({
         // by exactly the padding amount, since content-box percentages
         // ignore padding entirely.
         boxSizing: 'border-box',
-        gap: computeSize(layer, GAP_SCALE),
+        gap: GAP,
         padding,
-        borderRadius: padding * RADIUS_RATIO,
+        borderRadius: padding,
         backgroundColor: toCssColor(background),
         color: toCssColor(ink),
+        // Not .ds-interactive — a container isn't hoverable/pressable, it
+        // just needs its background/ink to glide on a theme-mode swap
+        // instead of snapping, the same as every interactive surface does.
+        transitionProperty: 'background-color, color',
+        transitionDuration: `${motionDuration}ms`,
+        transitionTimingFunction: MOTION_EASING,
         overflowX: direction === 'row' ? 'auto' : 'hidden',
         overflowY: direction === 'row' ? 'hidden' : 'auto',
         // overflow other than 'visible' on an axis zeroes that axis's
@@ -591,6 +681,15 @@ export function SecondaryImpl({
             flexShrink: 0,
             cursor: onReorder ? 'grab' : undefined,
             opacity: reorderStateRef.current?.key === key ? 0.5 : 1,
+            // Only opacity, declaratively — transform's own transition is
+            // owned imperatively by playFlip (the reorder glide) and the
+            // boundary bounce's Web Animations API call above, each
+            // already carrying motionDuration itself; declaring a
+            // transform transition here too would just fight both of them
+            // on every React re-render.
+            transitionProperty: 'opacity',
+            transitionDuration: `${motionDuration}ms`,
+            transitionTimingFunction: MOTION_EASING,
             touchAction: onReorder ? 'none' : undefined,
           }}
         >

@@ -10,16 +10,16 @@ import {
 
 describe('resolveRoleColor', () => {
   it('keeps hue and chroma fixed while lightness follows the layer equation', () => {
-    const role = { hue: 250, chroma: 0.1, lMin: 0, lMax: 1 }
-    const theme = { darkMode: true, lStep: 0.08 }
+    const role = { hue: 250, chroma: 0.1 }
+    const theme = { darkMode: true, contrast: 0.2 }
 
     const layer0 = resolveRoleColor(role, 0, theme)
     const layer1 = resolveRoleColor(role, 1, theme)
 
-    expect(layer0.l).toBeCloseTo(0.16)
+    expect(layer0.l).toBeCloseTo(0.36)
     expect(layer0.c).toBe(0.1)
     expect(layer0.h).toBe(250)
-    expect(layer1.l).toBeCloseTo(0.24)
+    expect(layer1.l).toBeCloseTo(0.488)
     expect(layer1.c).toBe(0.1)
     expect(layer1.h).toBe(250)
   })

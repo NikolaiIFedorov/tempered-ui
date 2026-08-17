@@ -1,8 +1,6 @@
 import { useLayer } from './layer'
 import { computeInkColor, toCssColor } from './theme'
 import { useTheme } from './ThemeProvider'
-import { computeSize } from './tokens'
-import { useTokens } from './TokensProvider'
 
 export interface ParagraphProps {
   children: string
@@ -19,12 +17,13 @@ export interface ParagraphProps {
 export function Paragraph({ children }: ParagraphProps) {
   const layer = useLayer()
   const theme = useTheme()
-  const tokens = useTokens()
-  const fontSize = computeSize(layer, tokens.paragraphFontSize)
 
   // Paragraph has no background of its own — it sits directly on whatever
   // its enclosing Secondary paints, so its ink matches that same surface.
   const ink = computeInkColor(theme.resolveBase(layer))
 
-  return <p style={{ fontSize, margin: 0, color: toCssColor(ink), minWidth: 0 }}>{children}</p>
+  // No explicit fontSize — a <p> inherits it from the app-root ambient
+  // value (see DesignTokens.fontSize in TokensProvider.tsx) like any other
+  // text on the page.
+  return <p style={{ margin: 0, color: toCssColor(ink), minWidth: 0 }}>{children}</p>
 }

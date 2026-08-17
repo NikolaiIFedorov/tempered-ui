@@ -24,6 +24,13 @@ describe('Button', () => {
     render(<Button label="Save" disabled />)
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
+
+  it('carries the shared interaction class and the token-driven motion duration, so hover/press/focus/disabled all animate at the same speed', () => {
+    render(<Button label="Save" />)
+    const button = screen.getByRole('button', { name: 'Save' })
+    expect(button).toHaveClass('ds-interactive')
+    expect(button.style.getPropertyValue('--ds-motion-duration')).toBe('150ms')
+  })
 })
 
 describe('Button width in a column-direction Secondary', () => {

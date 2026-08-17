@@ -1,12 +1,17 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { CollapseProvider, useCollapsed, useLayer, useSecondaryDirection } from './layer'
 import { PrimaryContent } from './PrimaryContent'
 import { useMinSizeRegistration, useNaturalWidthRegistration } from './registry'
 import { computeInkColor, toCssColor } from './theme'
 import { useTheme } from './ThemeProvider'
-import { computeSize } from './tokens'
 import { useTokens } from './TokensProvider'
+
+// Placeholder for the CAD kernel's real numeric tolerance (assembly/kernel),
+// not yet exposed over wasm — 3 decimal places, sign, and a 3-digit integer
+// part budget is a guess at the shape, not a derived value. Swap this for
+// the real tolerance-driven format once the kernel exposes one.
+const FIELD_WIDTH_TEMPLATE = '-999.999'
 
 export interface InputProps {
   icon?: ReactNode
@@ -23,14 +28,12 @@ export function Input({ icon, label, value, onChange, placeholder, disabled }: I
   const direction = useSecondaryDirection()
   const theme = useTheme()
   const tokens = useTokens()
-  const {
-    inputFieldWidth: FIELD_WIDTH_SCALE,
-    inputGap: GAP_SCALE,
-    inputPadding: PADDING_SCALE,
-    inputRadiusRatio: RADIUS_RATIO,
-  } = tokens
-  const gap = computeSize(layer, GAP_SCALE)
-  const padding = computeSize(layer, PADDING_SCALE)
+  const { padding: sharedPadding, motionDuration } = tokens
+  // The field's own internal padding and the label-to-field gap both step
+  // from the same Shared `padding` token, at half its magnitude — no
+  // separate tokens needed.
+  const padding = sharedPadding / 2
+  const gap = sharedPadding / 2
   const prefixRef = useRef<HTMLSpanElement>(null)
   const labelRef = useRef<HTMLLabelElement>(null)
   const [expandedSize, setExpandedSize] = useState<number | null>(null)
@@ -38,8 +41,18 @@ export function Input({ icon, label, value, onChange, placeholder, disabled }: I
   // why the real prefixRef can't answer this once collapsed or squeezed.
   const naturalWidthProbeRef = useRef<HTMLSpanElement>(null)
   const [naturalPrefixWidth, setNaturalPrefixWidth] = useState<number | null>(null)
+  // The field's own width used to be a flat token; now it's measured off an
+  // off-viewport clone of FIELD_WIDTH_TEMPLATE, the same trick as
+  // naturalWidthProbeRef below, so it stays "just wide enough" for whatever
+  // font actually renders rather than an arbitrary constant.
+  const fieldWidthProbeRef = useRef<HTMLSpanElement>(null)
+  const [fieldWidth, setFieldWidth] = useState<number | null>(null)
 
-  const fieldWidth = computeSize(layer, FIELD_WIDTH_SCALE)
+  useLayoutEffect(() => {
+    if (!fieldWidthProbeRef.current) return
+    const width = fieldWidthProbeRef.current.getBoundingClientRect().width
+    setFieldWidth((previous) => (previous === width ? previous : width))
+  }, [])
 
   // tokens (the whole object) is in deps, not just the specific scales
   // used directly here, so a live Settings edit re-measures and
@@ -80,12 +93,14 @@ export function Input({ icon, label, value, onChange, placeholder, disabled }: I
   // regardless of its padding/border, so no separate chrome tracking is
   // needed for the field itself.
   useMinSizeRegistration(
-    expandedSize === null
+    expandedSize === null || fieldWidth === null
       ? null
       : { expanded: direction === 'row' ? expandedSize + gap + fieldWidth : expandedSize },
   )
   useNaturalWidthRegistration(
-    naturalPrefixWidth === null ? null : naturalPrefixWidth + gap + fieldWidth,
+    naturalPrefixWidth === null || fieldWidth === null
+      ? null
+      : naturalPrefixWidth + gap + fieldWidth,
   )
 
   // The prefix sits directly on the enclosing Secondary's own background
@@ -135,26 +150,46 @@ export function Input({ icon, label, value, onChange, placeholder, disabled }: I
           <PrimaryContent icon={icon ? <span /> : undefined} label={label} />
         </CollapseProvider>
       </span>
+      {/* Off-viewport clone used only to measure how wide the field itself
+          needs to be to fit FIELD_WIDTH_TEMPLATE without clipping — see
+          fieldWidthProbeRef above. */}
+      <span
+        aria-hidden="true"
+        ref={fieldWidthProbeRef}
+        style={{
+          position: 'fixed',
+          top: -99999,
+          left: -99999,
+          visibility: 'hidden',
+          pointerEvents: 'none',
+        }}
+      >
+        {FIELD_WIDTH_TEMPLATE}
+      </span>
       <input
         type="text"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        style={{
-          width: fieldWidth,
-          // fieldWidth is the floor (and the row-direction, non-stretched
-          // size) — flexGrow lets the field itself be "the part that gets
-          // wider" when there's extra room, rather than the label growing
-          // or a gap opening up between label and field.
-          flexGrow: direction === 'column' ? 1 : undefined,
-          padding,
-          borderRadius: padding * RADIUS_RATIO,
-          boxSizing: 'border-box',
-          border: 'none',
-          backgroundColor: toCssColor(fieldBackground),
-          color: toCssColor(fieldInk),
-        }}
+        className="ds-interactive"
+        style={
+          {
+            width: fieldWidth ?? undefined,
+            // fieldWidth is the floor (and the row-direction, non-stretched
+            // size) — flexGrow lets the field itself be "the part that gets
+            // wider" when there's extra room, rather than the label growing
+            // or a gap opening up between label and field.
+            flexGrow: direction === 'column' ? 1 : undefined,
+            padding,
+            borderRadius: padding,
+            boxSizing: 'border-box',
+            border: 'none',
+            backgroundColor: toCssColor(fieldBackground),
+            color: toCssColor(fieldInk),
+            '--ds-motion-duration': `${motionDuration}ms`,
+          } as CSSProperties
+        }
       />
     </label>
   )

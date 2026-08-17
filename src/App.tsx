@@ -4,7 +4,7 @@ import { Button } from './design-system/Button'
 import { Secondary } from './design-system/Secondary'
 import { toCssColor } from './design-system/theme'
 import { ThemeProvider, useTheme } from './design-system/ThemeProvider'
-import { TokensProvider } from './design-system/TokensProvider'
+import { TokensProvider, useTokens } from './design-system/TokensProvider'
 import { SettingsPanel } from './SettingsPanel'
 
 // No width/height here — PrimaryContent's .primary-icon wrapper sizes
@@ -178,6 +178,7 @@ function useIsNarrow(bars: BarNaturalWidths): boolean {
 function AppContent() {
   const [activeTool, setActiveTool] = useState<Tool | null>(TOOLS[0]!)
   const theme = useTheme()
+  const tokens = useTokens()
 
   const [barWidths, setBarWidths] = useState<BarNaturalWidths>({
     files: 0,
@@ -223,7 +224,15 @@ function AppContent() {
 
   return (
     <div
-      style={{ position: 'relative', height: '100vh', width: '100vw', fontFamily: 'sans-serif' }}
+      style={{
+        position: 'relative',
+        height: '100vh',
+        width: '100vw',
+        fontFamily: 'sans-serif',
+        // The single ambient font-size every component's text inherits
+        // from — see DesignTokens.fontSize in TokensProvider.tsx.
+        fontSize: tokens.fontSize,
+      }}
     >
       {/* The eventual WASM viewport — full-bleed behind everything, not
           confined to a sub-rectangle the chrome carves out. */}

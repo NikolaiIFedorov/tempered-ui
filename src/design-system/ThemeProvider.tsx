@@ -9,58 +9,76 @@ import {
 } from './theme'
 import { computeLightness } from './tokens'
 
-const DEFAULT_BASE_ROLE: ColorRole = { hue: 250, chroma: 0.015, lMin: 0.05, lMax: 0.95 }
-const DEFAULT_ACCENT_ROLE: ColorRole = { hue: 250, chroma: 0.15, lMin: 0.2, lMax: 0.8 }
-const DEFAULT_L_STEP = 0.22
+const DEFAULT_ACCENT_ROLE: ColorRole = { hue: 250, chroma: 0.15 }
+const DEFAULT_CONTRAST = 0.1
+
+// Base's hue always tracks Accent's hue (see buildThemeValue) rather than
+// being independently settable — a whisper-strength tint that follows
+// whatever Accent currently is stays harmonious by construction, instead
+// of clashing the moment Accent moves away from a hardcoded value. This
+// chroma is what keeps that tint "boring" regardless of how saturated
+// Accent gets.
+const BASE_CHROMA = 0.015
+
+export type ThemeMode = 'dark' | 'light' | 'auto'
+
+function resolveDarkMode(themeMode: ThemeMode, osDarkMode: boolean): boolean {
+  if (themeMode === 'auto') return osDarkMode
+  return themeMode === 'dark'
+}
 
 export interface ThemeContextValue {
   darkMode: boolean
   resolveBase: (layer: number) => OklchColor
   resolveAccent: (layer: number) => OklchColor
   resolveCanvas: () => OklchColor
+  // Derived from accentRole, not independently settable — see BASE_CHROMA.
+  baseRole: ColorRole
   // The raw tunable values behind the resolvers above, plus setters — so
   // Settings can read and edit them directly rather than keeping its own
   // separate copy of the same numbers.
-  baseRole: ColorRole
-  setBaseRole: (role: ColorRole) => void
   accentRole: ColorRole
   setAccentRole: (role: ColorRole) => void
-  lStep: number
-  setLStep: (value: number) => void
+  contrast: number
+  setContrast: (value: number) => void
+  // 'auto' follows the OS's prefers-color-scheme (darkMode above tracks it
+  // live); 'dark'/'light' pin darkMode regardless of what the OS reports.
+  themeMode: ThemeMode
+  setThemeMode: (mode: ThemeMode) => void
 }
 
 function buildThemeValue(
   darkMode: boolean,
-  baseRole: ColorRole,
-  setBaseRole: (role: ColorRole) => void,
   accentRole: ColorRole,
   setAccentRole: (role: ColorRole) => void,
-  lStep: number,
-  setLStep: (value: number) => void,
+  contrast: number,
+  setContrast: (value: number) => void,
+  themeMode: ThemeMode,
+  setThemeMode: (mode: ThemeMode) => void,
 ): ThemeContextValue {
+  const baseRole: ColorRole = { hue: accentRole.hue, chroma: BASE_CHROMA }
+
   return {
     darkMode,
-    resolveBase: (layer) => resolveRoleColor(baseRole, layer, { darkMode, lStep }),
-    resolveAccent: (layer) => resolveRoleColor(accentRole, layer, { darkMode, lStep }),
+    resolveBase: (layer) => resolveRoleColor(baseRole, layer, { darkMode, contrast }),
+    resolveAccent: (layer) => resolveRoleColor(accentRole, layer, { darkMode, contrast }),
     // The page canvas, not a Secondary layer — layer -1 in the same
-    // lightness equation every other layer uses, unclamped by the role's
-    // lMin/lMax (those exist to stop deep *nesting* from washing a surface
-    // out, which doesn't apply to the canvas). It deliberately sits one
-    // lStep short of true black/white rather than at the true extreme: a
-    // screen showing nothing stays visually distinct from a canvas that's
-    // merely dark, and every real contrast step in the app then falls in
-    // the perceptually well-behaved region away from that extreme.
+    // lightness equation every other layer uses. It falls out of that
+    // equation rather than being clamped to it: geometric stepping already
+    // keeps it short of true black/white, so a screen showing nothing stays
+    // visually distinct from a canvas that's merely dark.
     resolveCanvas: () => ({
-      l: computeLightness(-1, darkMode, { lStep, lMin: -Infinity, lMax: Infinity }),
+      l: computeLightness(-1, darkMode, { contrast }),
       c: baseRole.chroma,
       h: baseRole.hue,
     }),
     baseRole,
-    setBaseRole,
     accentRole,
     setAccentRole,
-    lStep,
-    setLStep,
+    contrast,
+    setContrast,
+    themeMode,
+    setThemeMode,
   }
 }
 
@@ -70,24 +88,16 @@ function buildThemeValue(
 // standalone in a test or outside any ThemeProvider still renders sensibly.
 // The setters are no-ops there, since there's no state to update.
 const ThemeContext = createContext<ThemeContextValue>(
-  buildThemeValue(
-    false,
-    DEFAULT_BASE_ROLE,
-    () => {},
-    DEFAULT_ACCENT_ROLE,
-    () => {},
-    DEFAULT_L_STEP,
-    () => {},
-  ),
+  buildThemeValue(false, DEFAULT_ACCENT_ROLE, () => {}, DEFAULT_CONTRAST, () => {}, 'auto', () => {}),
 )
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [darkMode, setDarkMode] = useState(false)
-  const [baseRole, setBaseRole] = useState<ColorRole>(DEFAULT_BASE_ROLE)
+  const [osDarkMode, setOsDarkMode] = useState(false)
+  const [themeMode, setThemeMode] = useState<ThemeMode>('auto')
   const [accentRole, setAccentRole] = useState<ColorRole>(DEFAULT_ACCENT_ROLE)
-  const [lStep, setLStep] = useState(DEFAULT_L_STEP)
+  const [contrast, setContrast] = useState(DEFAULT_CONTRAST)
 
-  useEffect(() => watchDarkMode(setDarkMode), [])
+  useEffect(() => watchDarkMode(setOsDarkMode), [])
 
   useEffect(() => {
     const accent = resolveAccentColor()
@@ -95,16 +105,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       setAccentRole({
         hue: accent.h,
         chroma: Math.max(accent.c, DEFAULT_ACCENT_ROLE.chroma),
-        lMin: DEFAULT_ACCENT_ROLE.lMin,
-        lMax: DEFAULT_ACCENT_ROLE.lMax,
       })
     }
   }, [])
 
+  const darkMode = resolveDarkMode(themeMode, osDarkMode)
+
   const value = useMemo(
-    () =>
-      buildThemeValue(darkMode, baseRole, setBaseRole, accentRole, setAccentRole, lStep, setLStep),
-    [darkMode, baseRole, accentRole, lStep],
+    () => buildThemeValue(darkMode, accentRole, setAccentRole, contrast, setContrast, themeMode, setThemeMode),
+    [darkMode, accentRole, contrast, themeMode],
   )
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>

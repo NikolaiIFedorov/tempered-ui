@@ -10,20 +10,14 @@ export interface OklchColor {
 export interface ColorRole {
   hue: number
   chroma: number
-  lMin: number
-  lMax: number
 }
 
 export function resolveRoleColor(
   role: ColorRole,
   layer: number,
-  theme: { darkMode: boolean; lStep: number },
+  theme: { darkMode: boolean; contrast: number },
 ): OklchColor {
-  const l = computeLightness(layer, theme.darkMode, {
-    lStep: theme.lStep,
-    lMin: role.lMin,
-    lMax: role.lMax,
-  })
+  const l = computeLightness(layer, theme.darkMode, { contrast: theme.contrast })
   return { l, c: role.chroma, h: role.hue }
 }
 

@@ -7,15 +7,8 @@ function Probe() {
   const setTokens = useSetTokens()
   return (
     <div>
-      <div data-testid="base-size">{tokens.buttonPadding.baseSize}</div>
-      <button
-        onClick={() =>
-          setTokens((previous) => ({
-            ...previous,
-            buttonPadding: { ...previous.buttonPadding, baseSize: 99 },
-          }))
-        }
-      >
+      <div data-testid="padding">{tokens.padding}</div>
+      <button onClick={() => setTokens((previous) => ({ ...previous, padding: 99 }))}>
         edit
       </button>
     </div>
@@ -25,15 +18,11 @@ function Probe() {
 describe('TokensProvider', () => {
   it('defaults to DEFAULT_TOKENS outside a provider, with a no-op setter', () => {
     render(<Probe />)
-    expect(screen.getByTestId('base-size')).toHaveTextContent(
-      String(DEFAULT_TOKENS.buttonPadding.baseSize),
-    )
+    expect(screen.getByTestId('padding')).toHaveTextContent(String(DEFAULT_TOKENS.padding))
     // Clicking calls the no-op setter — should not throw, and since there's
     // no real state to update outside a provider, the value stays default.
     fireEvent.click(screen.getByText('edit'))
-    expect(screen.getByTestId('base-size')).toHaveTextContent(
-      String(DEFAULT_TOKENS.buttonPadding.baseSize),
-    )
+    expect(screen.getByTestId('padding')).toHaveTextContent(String(DEFAULT_TOKENS.padding))
   })
 
   it('updates every consumer when setTokens is called inside a provider', () => {
@@ -42,12 +31,12 @@ describe('TokensProvider', () => {
         <Probe />
       </TokensProvider>,
     )
-    expect(screen.getByTestId('base-size')).toHaveTextContent('12')
+    expect(screen.getByTestId('padding')).toHaveTextContent('12')
 
     act(() => {
       fireEvent.click(screen.getByText('edit'))
     })
 
-    expect(screen.getByTestId('base-size')).toHaveTextContent('99')
+    expect(screen.getByTestId('padding')).toHaveTextContent('99')
   })
 })

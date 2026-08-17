@@ -28,6 +28,13 @@ describe('Input', () => {
     render(<Input icon={<svg />} label="Width" value="42" onChange={() => {}} disabled />)
     expect(screen.getByDisplayValue('42')).toBeDisabled()
   })
+
+  it('carries the shared interaction class and the token-driven motion duration on the field', () => {
+    render(<Input icon={<svg />} label="Width" value="42" onChange={() => {}} />)
+    const field = screen.getByDisplayValue('42')
+    expect(field).toHaveClass('ds-interactive')
+    expect(field.style.getPropertyValue('--ds-motion-duration')).toBe('150ms')
+  })
 })
 
 describe('Input width in a column-direction Secondary', () => {
@@ -69,10 +76,12 @@ describe('Input min-size registration', () => {
       </MinSizeRegistryProvider>,
     )
 
-    // At layer 0: gap = 8 (base), fieldWidth = 96 (base) — prefix (30) + gap (8) + field (96) = 134.
+    // getBoundingClientRect is blanket-mocked to 30 for every element, so
+    // fieldWidth (now measured off its own hidden probe span) reads 30 too:
+    // gap = padding/2 = 6 (base 12/2) — prefix (30) + gap (6) + field (30) = 66.
     expect(register).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ expanded: 134 }),
+      expect.objectContaining({ expanded: 66 }),
     )
   })
 })
@@ -101,8 +110,10 @@ describe('Input natural width registration', () => {
       </CollapseProvider>,
     )
 
-    // gap = 8 (base), fieldWidth = 96 (base) — probe prefix (50) + gap (8) + field (96) = 154.
-    expect(register).toHaveBeenCalledWith(expect.any(String), 154)
+    // aria-hidden elements are mocked to 50 (the field-width probe is
+    // aria-hidden too, same as the prefix's own probe) — gap = padding/2 = 6
+    // (base 12/2) — probe prefix (50) + gap (6) + field (50) = 106.
+    expect(register).toHaveBeenCalledWith(expect.any(String), 106)
   })
 
   it("does not clone the caller's own icon element (and its data-testid/key) into the hidden probe", () => {

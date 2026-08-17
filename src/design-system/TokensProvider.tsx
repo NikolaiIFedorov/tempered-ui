@@ -1,39 +1,41 @@
 import { createContext, useContext, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { SizeScale } from './tokens'
 
-// One size token per component-owned scale — the single source every
-// component reads from instead of its own hardcoded module-level const,
-// and the single source Settings reads/writes instead of keeping its own
-// separate copy of the same numbers.
+// Secondary, Button, and Input padding/radius turned out to be either
+// identical or a fixed ratio of each other — one shared `padding` instead
+// of a copy per component. Radius settled at ratio 1 (radius = padding
+// exactly), so radiusRatio isn't its own token either anymore — every
+// component that has padding just uses that same value as its
+// borderRadius directly. Secondary's inter-item gap, Input's
+// label-to-field gap, Input's own internal field padding, and
+// PrimaryContent's icon-to-label gap all step from that same `padding`
+// value too (Secondary's gap at ratio 1, the other three at ratio 0.5)
+// rather than carrying their own tokens — no equation demanded any of
+// these divergences. Input's field width and PrimaryContent's collapsed
+// ellipsis width aren't tokens at all anymore — see FIELD_WIDTH_TEMPLATE in
+// Input.tsx and ELLIPSIS_WIDTH in PrimaryContent.tsx. `fontSize` is a
+// genuinely different physical quantity from a spacing value, so it never
+// merges into `padding` — but it isn't Paragraph's alone either: it's set
+// once, ambiently, on the app root (see AppContent in App.tsx) and
+// inherited from there by every component's text, Paragraph included (an
+// explicit `font: inherit` reset on form controls in index.css makes
+// Button/Input's <button>/<input> pick it up too, since those don't
+// inherit font styles by default). PrimaryContent's icon (1em) rides on
+// whatever this resolves to in context, same as everything else. `motionDuration`
+// is a "how snappy" dial, the same character as padding/fontSize — but its
+// easing curve isn't: nothing needs a *tuned* curve the way duration needs a
+// tuned speed, so that's a fixed constant (MOTION_EASING in motion.ts)
+// instead of a second token.
 export interface DesignTokens {
-  secondaryGap: SizeScale
-  secondaryPadding: SizeScale
-  secondaryRadiusRatio: number
-  buttonPadding: SizeScale
-  buttonRadiusRatio: number
-  inputFieldWidth: SizeScale
-  inputGap: SizeScale
-  inputPadding: SizeScale
-  inputRadiusRatio: number
-  paragraphFontSize: SizeScale
-  primaryContentGap: SizeScale
-  primaryContentEllipsisWidth: number
+  padding: number
+  fontSize: number
+  motionDuration: number
 }
 
 export const DEFAULT_TOKENS: DesignTokens = {
-  secondaryGap: { baseSize: 8, shrinkRatio: 0.85, minSize: 2 },
-  secondaryPadding: { baseSize: 12, shrinkRatio: 0.6, minSize: 4 },
-  secondaryRadiusRatio: 0.5,
-  buttonPadding: { baseSize: 12, shrinkRatio: 0.6, minSize: 4 },
-  buttonRadiusRatio: 0.5,
-  inputFieldWidth: { baseSize: 96, shrinkRatio: 0.85, minSize: 48 },
-  inputGap: { baseSize: 8, shrinkRatio: 0.85, minSize: 4 },
-  inputPadding: { baseSize: 6, shrinkRatio: 0.6, minSize: 2 },
-  inputRadiusRatio: 0.5,
-  paragraphFontSize: { baseSize: 14, shrinkRatio: 0.9, minSize: 10 },
-  primaryContentGap: { baseSize: 6, shrinkRatio: 0.85, minSize: 2 },
-  primaryContentEllipsisWidth: 24,
+  padding: 12,
+  fontSize: 14,
+  motionDuration: 150,
 }
 
 export interface TokensContextValue {

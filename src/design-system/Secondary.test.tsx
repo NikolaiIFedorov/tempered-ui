@@ -56,14 +56,7 @@ function TokenEditor({ children }: { children: ReactNode }) {
   const setTokens = useSetTokens()
   return (
     <div>
-      <button
-        onClick={() =>
-          setTokens((previous) => ({
-            ...previous,
-            secondaryPadding: { ...previous.secondaryPadding, baseSize: 500 },
-          }))
-        }
-      >
+      <button onClick={() => setTokens((previous) => ({ ...previous, padding: 500 }))}>
         grow padding
       </button>
       {children}
@@ -430,8 +423,8 @@ describe('Secondary natural width aggregation', () => {
       </Secondary>,
     )
 
-    // layer 0: gap = 8, padding = 12*2 = 24 — 50 + 30 + 8 + 24 = 112.
-    expect(onNaturalWidthChange).toHaveBeenCalledWith(112)
+    // layer 0: gap = padding = 12, padding total = 12*2 = 24 — 50 + 30 + 12 + 24 = 116.
+    expect(onNaturalWidthChange).toHaveBeenCalledWith(116)
   })
 
   it("takes the max across children's natural widths (not their sum) for a column root, since they stretch to the widest one rather than stacking side by side", () => {
@@ -460,10 +453,10 @@ describe('Secondary natural width aggregation', () => {
       </Secondary>,
     )
 
-    // Nested column Secondary is at layer 1, where padding has shrunk to
-    // 7.2 (12 * 0.6) — its own natural width: max(40, 70) + 2*7.2 = 84.4.
-    // Root (row, layer 0): 10 + 84.4 + gap (8) + padding (24) = 126.4.
-    expect(onNaturalWidthChange).toHaveBeenLastCalledWith(126.4)
+    // Padding is a flat constant (12), the same at every layer — nested
+    // column Secondary's own natural width: max(40, 70) + 2*12 = 94.
+    // Root (row, layer 0): 10 + 94 + gap (12, = padding) + padding (24) = 140.
+    expect(onNaturalWidthChange).toHaveBeenLastCalledWith(140)
   })
 
   it('reports no natural width requirement when nothing in the subtree registers one (e.g. Paragraph-only content), the same way min-size registration is skipped', () => {
@@ -655,6 +648,10 @@ describe('drag-to-reorder', () => {
     HTMLElement.prototype.setPointerCapture = vi.fn()
     HTMLElement.prototype.hasPointerCapture = vi.fn(() => true)
     HTMLElement.prototype.releasePointerCapture = vi.fn()
+    // jsdom doesn't implement the Web Animations API the boundary bounce
+    // uses (Secondary.tsx feature-detects it for exactly this reason) — a
+    // plain mock lets these tests observe whether/how often it's called.
+    HTMLElement.prototype.animate = vi.fn()
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
       this: HTMLElement,
     ) {
@@ -821,6 +818,67 @@ describe('drag-to-reorder', () => {
     expect(onReorder).not.toHaveBeenCalled()
     expect(a.style.opacity).toBe('1')
     expect(screen.getAllByTestId(/[abc]/).map((el) => el.dataset.testid)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('plays a boundary bounce once when the pointer pushes past the last position, not again while it stays past it', () => {
+    const { container } = render(
+      <Secondary onReorder={vi.fn()}>
+        <ChildProbe key="a" label="a" expanded={10} />
+        <ChildProbe key="b" label="b" expanded={10} />
+        <ChildProbe key="c" label="c" expanded={10} />
+      </Secondary>,
+    )
+
+    // c is already the last item — nothing to reorder past. b's own
+    // trailing edge (the furthest of the two other items) is at x=200.
+    const c = itemWrapper(container, 'c')
+    fireEvent.pointerDown(c, { clientX: 250, pointerId: 1, buttons: 1 })
+    fireEvent.pointerMove(c, { clientX: 250, pointerId: 1, buttons: 1 })
+    expect(c.animate).toHaveBeenCalledOnce()
+
+    // Still pushing past the same boundary — must not re-trigger.
+    fireEvent.pointerMove(c, { clientX: 260, pointerId: 1, buttons: 1 })
+    expect(c.animate).toHaveBeenCalledOnce()
+  })
+
+  it('resets the boundary bounce once the pointer returns within bounds, so a re-crossing plays it again', () => {
+    const { container } = render(
+      <Secondary onReorder={vi.fn()}>
+        <ChildProbe key="a" label="a" expanded={10} />
+        <ChildProbe key="b" label="b" expanded={10} />
+        <ChildProbe key="c" label="c" expanded={10} />
+      </Secondary>,
+    )
+
+    const c = itemWrapper(container, 'c')
+    fireEvent.pointerDown(c, { clientX: 250, pointerId: 1, buttons: 1 })
+    fireEvent.pointerMove(c, { clientX: 250, pointerId: 1, buttons: 1 })
+    expect(c.animate).toHaveBeenCalledOnce()
+
+    // Back within bounds (b's own midpoint) — no reorder happens either,
+    // since c is already the last slot, but the boundary flag clears.
+    fireEvent.pointerMove(c, { clientX: 150, pointerId: 1, buttons: 1 })
+    expect(c.animate).toHaveBeenCalledOnce()
+
+    // Crossing back out plays it again.
+    fireEvent.pointerMove(c, { clientX: 250, pointerId: 1, buttons: 1 })
+    expect(c.animate).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not play the boundary bounce when the move actually reorders', () => {
+    const { container } = render(
+      <Secondary onReorder={vi.fn()}>
+        <ChildProbe key="a" label="a" expanded={10} />
+        <ChildProbe key="b" label="b" expanded={10} />
+        <ChildProbe key="c" label="c" expanded={10} />
+      </Secondary>,
+    )
+
+    const a = itemWrapper(container, 'a')
+    fireEvent.pointerDown(a, { clientX: 50, pointerId: 1, buttons: 1 })
+    fireEvent.pointerMove(a, { clientX: 160, pointerId: 1, buttons: 1 })
+
+    expect(a.animate).not.toHaveBeenCalled()
   })
 })
 

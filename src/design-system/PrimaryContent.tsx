@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
-import { useCollapsed, useLayer } from './layer'
-import { computeSize } from './tokens'
+import { useCollapsed } from './layer'
 import { useTokens } from './TokensProvider'
 
 export interface PrimaryContentProps {
@@ -15,10 +14,20 @@ export interface PrimaryContentProps {
 // dimensions use the same value.
 const ICON_SIZE = '1em'
 
+// The collapsed, icon-less fallback is a deliberately fixed-width preview —
+// ellipsis truncation only kicks in because the box doesn't grow with the
+// label, so there's no "expected content" to measure it against the way
+// FIELD_WIDTH_TEMPLATE sizes Input's field (see Input.tsx). Sized in `em`,
+// the same font-relative unit as ICON_SIZE above, instead of a flat px
+// guess, so it scales with whatever font is actually active rather than
+// going stale against it.
+const ELLIPSIS_WIDTH = '4em'
+
 export function PrimaryContent({ icon, label }: PrimaryContentProps) {
-  const layer = useLayer()
   const collapsed = useCollapsed()
-  const { primaryContentGap: GAP_SCALE, primaryContentEllipsisWidth: ELLIPSIS_WIDTH } = useTokens()
+  const { padding } = useTokens()
+  // Same ratio as Input's own gap/padding — see TokensProvider.
+  const primaryContentGap = padding / 2
 
   if (collapsed) {
     if (icon) {
@@ -58,7 +67,7 @@ export function PrimaryContent({ icon, label }: PrimaryContentProps) {
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: computeSize(layer, GAP_SCALE),
+        gap: primaryContentGap,
       }}
     >
       {icon ? (

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { CollapseProvider, useCollapsed, useLayer, useSecondaryDirection } from './layer'
 import { PrimaryContent } from './PrimaryContent'
 import {
@@ -10,7 +10,6 @@ import {
 } from './registry'
 import { computeInkColor, toCssColor } from './theme'
 import { useTheme } from './ThemeProvider'
-import { computeSize } from './tokens'
 import { useTokens } from './TokensProvider'
 
 export interface ButtonProps {
@@ -26,8 +25,7 @@ export function Button({ icon, label, onClick, disabled }: ButtonProps) {
   const direction = useSecondaryDirection()
   const theme = useTheme()
   const tokens = useTokens()
-  const { buttonPadding: PADDING_SCALE, buttonRadiusRatio: RADIUS_RATIO } = tokens
-  const padding = computeSize(layer, PADDING_SCALE)
+  const { padding, motionDuration } = tokens
   const buttonRef = useRef<HTMLButtonElement>(null)
   const [expandedSize, setExpandedSize] = useState<number | null>(null)
   // A second, always-on measurement, independent of both the real button's
@@ -48,7 +46,7 @@ export function Button({ icon, label, onClick, disabled }: ButtonProps) {
   // Measuring the real <button> (not just PrimaryContent's inner span)
   // means padding/border are captured automatically, whatever they are —
   // no need to separately track "chrome" this component adds. tokens (the
-  // whole object, not just buttonPadding) is in deps so a live Settings
+  // whole object, not just padding) is in deps so a live Settings
   // edit re-measures and re-registers rather than only re-painting — this
   // stays correct even for indirect effects (e.g. PrimaryContent's own
   // gap token changing this button's rendered width) without needing to
@@ -100,24 +98,28 @@ export function Button({ icon, label, onClick, disabled }: ButtonProps) {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      style={{
-        // A column-direction Secondary's items stretch to the width of
-        // whichever sibling is widest by default (ordinary flexbox
-        // align-items: stretch) — but a <button> is an inline-level box
-        // that won't actually fill that stretched space on its own unless
-        // told to. Row-direction toolbars are unaffected: their cross axis
-        // is height, which this doesn't touch.
-        width: direction === 'column' ? '100%' : undefined,
-        // Needed the moment width is explicit — otherwise padding renders
-        // outside the 100% box instead of inside it, the same overflow
-        // Secondary's own row hit earlier for the same reason.
-        boxSizing: 'border-box',
-        padding,
-        borderRadius: padding * RADIUS_RATIO,
-        border: 'none',
-        backgroundColor: toCssColor(background),
-        color: toCssColor(ink),
-      }}
+      className="ds-interactive"
+      style={
+        {
+          // A column-direction Secondary's items stretch to the width of
+          // whichever sibling is widest by default (ordinary flexbox
+          // align-items: stretch) — but a <button> is an inline-level box
+          // that won't actually fill that stretched space on its own unless
+          // told to. Row-direction toolbars are unaffected: their cross axis
+          // is height, which this doesn't touch.
+          width: direction === 'column' ? '100%' : undefined,
+          // Needed the moment width is explicit — otherwise padding renders
+          // outside the 100% box instead of inside it, the same overflow
+          // Secondary's own row hit earlier for the same reason.
+          boxSizing: 'border-box',
+          padding,
+          borderRadius: padding,
+          border: 'none',
+          backgroundColor: toCssColor(background),
+          color: toCssColor(ink),
+          '--ds-motion-duration': `${motionDuration}ms`,
+        } as CSSProperties
+      }
     >
       <PrimaryContent icon={icon} label={label} />
       {/* Off-viewport clone used only to measure the button's true,

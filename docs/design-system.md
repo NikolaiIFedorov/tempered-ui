@@ -50,25 +50,22 @@ from, without being set by hand anywhere in the component tree.
 
 ## Size
 
-Perceived size differences are proportional, not absolute (Weber-Fechner) —
-the same 4px change reads as significant at 16px and invisible at 200px. Size
-tokens therefore step geometrically, not linearly:
-
-```
-size(layer) = baseSize * shrinkRatio^layer
-```
-
-`shrinkRatio` is not one shared constant — it's tuned per token. Padding
-uses `0.6` (a deliberately fast shrink, so nesting depth reads as an
-obvious step rather than something you have to look closely to notice);
-gap and font size use a gentler `0.85`, since those need to stay
-legible/usable rather than dramatically shrink. All of them share the
-same equation shape, just calibrated differently per token.
+Size tokens (padding, gap, field width, font size) are flat constants, not a
+function of `layer` — depth is signaled once, by color (see below), not
+redundantly by also shrinking geometry at every nesting level. This was a
+deliberate reversal of an earlier design: size tokens originally stepped
+geometrically with layer (`size(layer) = baseSize * shrinkRatio^layer`), on
+a Weber-Fechner argument for why a shrink should be proportional rather than
+linear if you have one — but that argument only justifies the *shape* of a
+per-layer step, it never established that size needed to encode depth at
+all. Color's per-layer lightness step is unambiguous and load-bearing on its
+own; a second, redundant channel for the same signal wasn't worth the
+`minSize`-floor machinery it required.
 
 An icon isn't sized by its own token at all — `PrimaryContent` sizes its
 icon wrapper to `1em`, tying it directly to whatever font-size is
 actually active in context (a Primary's inherited default, Paragraph's
-own layer-scaled size, ...) rather than tracking it separately. This
+own font-size token, ...) rather than tracking it separately. This
 also keeps it square, since both dimensions use the same value. The
 wrapper needs an explicit `display` (`inline-block`, not the default
 `inline`) for this to work at all — a plain inline element ignores
@@ -80,14 +77,11 @@ against — a real bug hit live as a giant, wrongly-scaled icon in
 collapsed mode specifically, where this wrapper renders as the outermost
 element rather than getting free blockification as a flex item.
 
-Each size token has a `minSize` floor independent of the equation above — the
-point past which the token stops shrinking and instead triggers collapse
-(see below).
-
 Fillets (border-radius) aren't their own token — every component that
-has padding derives its corner radius directly from that same computed
-padding value (`radius = padding * 0.5`), so rounding scales with layer
-depth for free instead of needing to be kept in sync separately.
+has padding derives its corner radius directly from that same padding
+value (`radius = padding`), so rounding stays in sync for free instead
+of needing to be kept in sync separately. Secondary's inter-item gap is
+the same idea: it isn't its own token either, it just equals `padding`.
 
 Any element that carries both its own padding and a `width`/`maxWidth`
 constraint (Secondary's flex row) needs `box-sizing: border-box` — with
@@ -340,10 +334,10 @@ drop.
 
 ## Live tokens
 
-Every tunable constant across the design system — each component's own
-`SizeScale` objects (`baseSize`/`shrinkRatio`/`minSize`), radius ratios,
-the color roles (`baseRole`/`accentRole`), and `Lstep` — lives in exactly
-one place: `TokensProvider`/`useTokens()` for size, `ThemeProvider`/
+Every tunable constant across the design system — each size token (a flat
+number), the color roles (`baseRole`/`accentRole`), and
+`Lstep` — lives in exactly one place: `TokensProvider`/`useTokens()` for size,
+`ThemeProvider`/
 `useTheme()` (already the home of color) for color. No component keeps
 its own hardcoded copy; each reads its scale from `useTokens()` (or
 `useTheme()` for color) on every render, the same way every other
@@ -374,14 +368,86 @@ measuring effect depends on the whole `tokens` object rather than trying
 to enumerate every indirect case — over-triggering a cheap re-measurement
 is a safe trade for not chasing indirect dependencies one by one.
 
-## Animation speed
+## Animation
 
-```
-duration(layer) = baseDuration * durationRatio^layer
-```
+A single `motionDuration` token (`TokensProvider.tsx`, live-editable under
+Settings' Motion section) drives every animation in the system — not one
+per motion type. Nothing here needs a *tuned* speed per interaction the way
+Size's tokens need tuned magnitudes; one dial answers "how snappy" for all
+of them, consistent with size no longer being layer-scaled either (see Size
+above — a second knob only earns its place when something actually needs to
+diverge, not by default). Easing is a fixed constant, `MOTION_EASING` in
+`motion.ts`, for the same reason: nothing needs a tuned *curve*.
 
-Deeper layers are physically smaller on screen, so they can complete the same
-perceived motion in less time — this is an optional refinement, not a
-requirement; a single `baseDuration` per motion type (open/close, hover,
-collapse-transition) is a valid starting point if per-layer duration scaling
-turns out to be unnecessary in practice.
+**The rule every animation here has to follow**: only `background-color`,
+`color`, `filter`, `box-shadow`, `outline`, and `transform` ever animate.
+Never `width`, `height`, or `padding` — Collapse's own measurement system
+(above) reads real DOM boxes via `getBoundingClientRect()` synchronously in
+`useLayoutEffect`, and a mid-transition size on one of those properties
+would feed a wrong number into a collapse threshold or natural-width floor.
+`transform` is the one property `getBoundingClientRect()` *does* reflect
+mid-animation, but it's still safe: those reads only re-run on a React
+state/prop change (`collapsed`, `icon`, `label`, `tokens`), never on a
+CSS-only `:hover`/`:active` toggle or an animation running outside React's
+render cycle.
+
+**Where it's applied**:
+- `.ds-interactive` (`index.css`) — the shared class every clickable Primary
+  surface (Button, Input's field, Selector's option buttons) carries:
+  `:hover` brightens via `filter` (color-agnostic, works on any computed
+  OKLCH background without `theme.ts` needing a separate shade), `:active`
+  scales down slightly, `:focus-visible` gets an outline, `:disabled` dims.
+  Each instance sets the token's value as a CSS custom property
+  (`--ds-motion-duration`) alongside its own computed inline styles — the
+  same shape as `.primary-icon`, a class for what inline styles can't
+  express, not a wholesale move away from them.
+- Selector's accent-background swap on selection, and the light/dark theme
+  swap — both animate for free once `background-color`/`color` transitions
+  are on the relevant surfaces; React just re-renders a new color value; no
+  separate animation code needed for either.
+- Drag reorder (`Secondary.tsx`) — two distinct cases, both `transform`-only:
+  siblings glide to their new slot instead of teleporting there via a FLIP
+  (First-Last-Invert-Play, `motion.ts`'s `playFlip`) triggered whenever a
+  reorder step actually changes the order; pushing the pointer past the
+  first/last position (nothing left to reorder into) instead plays a brief
+  overshoot-and-return bounce via the Web Animations API. The two are
+  mutually exclusive by construction — a move either reorders (FLIP) or
+  doesn't (checked for a boundary push instead), never both.
+
+**Not yet done**: animating the collapse/expand swap itself. `PrimaryContent`'s
+icon-only and icon+label branches are structurally different subtrees, not
+one element changing size — a real cross-fade needs the outgoing and
+incoming branch to briefly coexist, which none of the above needed to solve.
+
+Also not yet done: a rejection cue for hitting a limit — a disabled control
+clicked anyway, invalid text entered, or (once a bounded drag control like a
+slider exists) a drag pushed past its range. The plan is a horizontal shake
+(`translateX`, back and forth), deliberately on a different axis than the
+hover/press pair above (`scale`/`translateY`) so it can never read as a
+stronger version of a normal press — a distinct axis, not a distinct
+magnitude. Color was considered and rejected: `danger` (see Color, above) is
+deliberately unclaimed until a real destructive action exists, and hitting a
+limit isn't that — spending red on "unavailable" would pre-empt the one hue
+this system has reserved for "this will destroy something," for a case that
+means something else entirely.
+
+Unlike the hover/press pair, a shake can't just reuse `MOTION_EASING`/
+`ease-out` per leg the way the existing boundary-overshoot bounce already
+does (`Secondary.tsx`'s drag-reorder push-past-the-end animation) — that
+bounce's three keyframes each get `ease-out` independently, which leaves a
+velocity mismatch right at the peak: decelerating in, then a freshly
+accelerating leg back out. A shake reverses direction at least twice, so
+that seam would be far more visible; it needs one continuous curve through
+the whole reversal rather than two eased legs stitched together.
+
+Two things block building it now, not just leaving it undesigned:
+- No target exists yet. `Input` has no validation concept, and there's no
+  bounded drag control (a slider) in the codebase at all — only the
+  disabled-button case has a real element to attach to.
+- Even the disabled-button case can't reuse the existing `onClick` handler:
+  a native `<button disabled>` doesn't dispatch `click` or `pointerdown` in
+  most browsers, so nothing today would ever see the attempt the shake is
+  supposed to fire on. Building this means first deciding how a disabled
+  control intercepts an attempted interaction at all — kept clickable but
+  inert with its own guard, or caught on a non-disabled wrapper — before
+  the shake itself has anything to hook into.
